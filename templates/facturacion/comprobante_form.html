@@ -1,0 +1,342 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="app-content py-3" x-data="facturador('{{ tipo_comprobante_id }}')">
+    <div class="container-fluid">
+        
+        <div class="row mb-4 align-items-center bg-white p-3 rounded shadow-sm border-start border-4"
+             :class="isFactura ? 'border-primary' : 'border-success'">
+            <div class="col-md-6">
+                <h3 class="mb-0 fw-bold text-dark" x-text="tituloDoc"></h3>
+                <p class="text-muted mb-0 small">Formulario electrónico validado bajo normativas UBL 2.1 - SUNAT</p>
+            </div>
+            <div class="col-md-6 text-md-end mt-2 mt-md-0">
+                <span class="fs-6 px-3 py-2 rounded-pill fw-bold text-white shadow-sm"
+                      :class="isFactura ? 'bg-primary' : 'bg-success'">
+                    <i class="bi bi-shield-check-fill me-1"></i> Código SUNAT: <span x-text="tipoDocId"></span>
+                </span>
+            </div>
+        </div>
+
+        <form id="frmVenta" @submit.prevent="guardarComprobante">
+            {% csrf_token %}
+            <input type="hidden" name="tipo_comprobante" value="{{ tipo_comprobante_id }}">
+
+            <div class="row g-3">
+                <div class="col-xl-4 col-lg-5">
+                    
+                    <div class="card mb-3 shadow-sm border-top-0">
+                        <div class="card-header text-white" :class="isFactura ? 'bg-dark' : 'bg-secondary'">
+                            <h5 class="card-title mb-0 fs-6"><i class="bi bi-person-bounding-box me-2"></i>Datos del Cliente</h5>
+                        </div>
+                        <div class="card-body bg-light-50">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold small text-muted">Buscar o Seleccionar Receptor</label>
+                                <select class="form-select select2-ready shadow-sm" name="cliente" required x-model="clienteSeleccionado" @change="actualizarDatosCliente">
+                                    <option value="">-- Seleccione un Cliente --</option>
+                                    {% for c in clientes %}
+                                        <option value="{{ c.id }}" data-doc="{{ c.nrodoc }}" data-dir="{{ c.direccion|default:'' }}">
+                                            {{ c.nrodoc }} - {{ c.razon_social }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-1">
+                                <label class="form-label fw-semibold small text-muted">Dirección Fiscal Registrada</label>
+                                <textarea class="form-control form-control-sm bg-white text-dark small" rows="2" x-model="clienteData.direccion" readonly disabled></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-3 shadow-sm">
+                        <div class="card-header bg-white border-bottom">
+                            <h5 class="card-title mb-0 fs-6 text-dark fw-bold"><i class="bi bi-gear-wide-connected me-2"></i>Condiciones de Emisión</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label small text-muted">Fecha de Emisión</label>
+                                    <input type="date" class="form-control form-control-sm text-center" name="fecha_emision" value="{% now 'Y-m-d' %}" required>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small text-muted">Forma de Pago</label>
+                                    <select class="form-select form-select-sm text-center fw-bold" name="forma_pago" x-model="formaPago" @change="calcularTotales">
+                                        <option value="Contado">💵 Contado</option>
+                                        <option value="Credito">💳 Crédito</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div x-show="formaPago === 'Credito'" x-transition:enter.duration.300ms class="mt-3 p-3 bg-light rounded border border-warning">
+                                <h6 class="text-warning fw-bold small mb-3"><i class="bi bi-calendar3-event me-2"></i>Configuración de Cuotas</h6>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <label class="form-label x-small text-muted">N° de Cuotas</label>
+                                        <input type="number" class="form-control form-control-sm text-center" x-model.number="credito.cantidad" min="1" @input="generarCuotas">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label x-small text-muted">Intervalo (Días)</label>
+                                        <input type="number" class="form-control form-control-sm text-center" x-model.number="credito.dias" min="1" @input="generarCuotas">
+                                    </div>
+                                </div>
+
+                                <template x-if="cuotas.length > 0">
+                                    <div class="table-responsive rounded shadow-sm bg-white" style="max-height: 180px; overflow-y: auto;">
+                                        <table class="table table-sm table-striped table-hover mb-0 text-center small">
+                                            <thead class="table-light sticky-top">
+                                                <tr><th>Letra</th><th>Vencimiento</th><th>Monto</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                <template x-for="(c, index) in cuotas" :key="index">
+                                                    <tr>
+                                                        <td class="align-middle font-monospace" x-text="'C' + (index + 1)"></td>
+                                                        <td><input type="date" class="form-control form-control-sm border-0 bg-transparent text-center" x-model="c.fecha"></td>
+                                                        <td><input type="number" step="0.01" class="form-control form-control-sm border-0 bg-transparent text-end fw-bold text-primary" x-model.number="c.importe" @input="ajustarCuotasManual"></td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-8 col-lg-7">
+                    
+                    <div class="card mb-3 shadow-sm border-start border-3" :class="isFactura ? 'border-primary' : 'border-success'">
+                        <div class="card-body p-3">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-9">
+                                    <label class="form-label small fw-semibold text-muted mb-1"><i class="bi bi-search me-1"></i> Catálogo de Ítems Registrados</label>
+                                    <select class="form-select" x-model="productoBuscado">
+                                        <option value="">-- Selecciona el ítem que vas a vender --</option>
+                                        {% for p in productos %}
+                                            <option value="{{ p.id }}" data-nombre="{{ p.nombre }}" data-precio="{{ p.valor_unitario }}">
+                                                🤘📦 {{ p.nombre }} (S/. {{ p.valor_unitario }})
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <button type="button" class="btn text-white w-100 fw-bold" :class="isFactura ? 'bg-primary' : 'bg-success'" @click="agregarItem">
+                                        <i class="bi bi-cart-plus-fill me-1"></i> Agregar línea
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm mb-3 overflow-hidden">
+                        <div class="table-responsive" style="min-height: 200px;">
+                            <table class="table table-hover align-middle mb-0 text-nowrap">
+                                <thead class="table-dark small text-uppercase font-monospace text-center">
+                                    <tr>
+                                        <th style="width: 5%;">#</th>
+                                        <th class="text-start" style="width: 45%;">Descripción del Ítems</th>
+                                        <th style="width: 15%;">Cantidad</th>
+                                        <th style="width: 15%;">V.U. (Sin IGV)</th>
+                                        <th class="text-end" style="width: 15%;">Subtotal</th>
+                                        <th style="width: 5%;">Eliminar</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="small">
+                                    <template x-for="(item, index) in carrito" :key="item.id">
+                                        <tr class="text-center">
+                                            <td class="font-monospace text-muted" x-text="index + 1"></td>
+                                            <td class="text-start fw-bold text-dark" x-text="item.nombre"></td>
+                                            <td class="px-3">
+                                                <input type="number" class="form-control form-control-sm text-center shadow-sm" min="1" step="1" x-model.number="item.cantidad" @input="calcularTotales">
+                                            </td>
+                                            <td class="px-3">
+                                                <div class="input-group input-group-sm shadow-sm">
+                                                    <span class="input-group-text bg-light text-muted">S/.</span>
+                                                    <input type="number" class="form-control text-end" step="0.01" x-model.number="item.v_unitario" @input="calcularTotales">
+                                                </div>
+                                            </td>
+                                            <td class="fw-bold text-dark text-end pe-3 font-monospace">
+                                                S/. <span x-text="(item.cantidad * item.v_unitario).toFixed(2)"></span>
+                                            </td>
+                                            <td>
+                                                <button type="button" class="btn btn-sm btn-outline-danger border-0 rounded-circle" @click="eliminarItem(index)">
+                                                    <i class="bi bi-trash3-fill"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                    <template x-if="carrito.length === 0">
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted py-5 bg-white">
+                                                <div class="py-3">
+                                                    <i class="bi bi-cart-x text-muted display-6"></i>
+                                                    <p class="mt-2 mb-0 small">El comprobante no tiene líneas cargadas en el detalle actual.</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 justify-content-end">
+                        <div class="col-md-6 col-lg-5">
+                            <div class="card card-outline border-top-0 border-bottom border-3 shadow-sm" :class="isFactura ? 'border-primary' : 'border-success'">
+                                <div class="card-body p-3 small font-monospace">
+                                    <div class="d-flex justify-content-between mb-2 text-muted">
+                                        <span>Op. Gravadas (Base):</span>
+                                        <span>S/. <span x-text="totales.op_grabadas"></span></span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2 text-muted">
+                                        <span>Impuesto IGV (18%):</span>
+                                        <span>S/. <span x-text="totales.igv"></span></span>
+                                    </div>
+                                    <hr class="my-2 bg-secondary opacity-25">
+                                    <div class="d-flex justify-content-between align-items-center text-dark">
+                                        <span class="fs-5 fw-bold">Importe Total:</span>
+                                        <span class="fs-4 fw-bolder" :class="isFactura ? 'text-primary' : 'text-success'">
+                                            S/. <span x-text="totales.total"></span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <button type="submit" class="btn btn-lg w-100 fw-bold shadow text-white" 
+                                        :class="isFactura ? 'bg-dark' : 'bg-success'" :disabled="carrito.length === 0">
+                                    <i class="bi bi-cloud-arrow-up-fill me-2"></i> Emitir a SUNAT (Generar XML)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function facturador(tipoCompId) {
+    return {
+        tipoDocId: tipoCompId,
+        isFactura: tipoCompId === '01',
+        tituloDoc: tipoCompId === '01' ? 'Emitir Factura Electrónica' : 'Emitir Boleta de Venta',
+        formaPago: 'Contado',
+        clienteSeleccionado: '',
+        productoBuscado: '',
+        clienteData: { direccion: '' },
+        carrito: [],
+        cuotas: [],
+        credito: { cantidad: 1, dias: 30 },
+        totales: { op_grabadas: '0.00', igv: '0.00', total: '0.00' },
+
+        actualizarDatosCliente(e) {
+            const select = e.target;
+            const option = select.options[select.selectedIndex];
+            this.clienteData.direccion = option.getAttribute('data-dir') || 'Sin dirección registrada en el sistema.';
+        },
+
+        agregarItem() {
+            if (!this.productoBuscado) return;
+            
+            const select = document.querySelector('select[x-model="productoBuscado"]');
+            const option = select.options[select.selectedIndex];
+            
+            const id = this.productoBuscado;
+            const nombre = option.getAttribute('data-nombre');
+            const precio = parseFloat(option.getAttribute('data-precio'));
+
+            const existe = this.carrito.find(item => item.id === id);
+            if (existe) {
+                existe.cantidad++;
+            } else {
+                this.carrito.push({ id: id, nombre: nombre, v_unitario: precio, cantidad: 1 });
+            }
+            this.productoBuscado = '';
+            this.calcularTotales();
+        },
+
+        eliminarItem(index) {
+            this.carrito.splice(index, 1);
+            this.calcularTotales();
+        },
+
+        calcularTotales() {
+            let subtotal = 0;
+            this.carrito.forEach(item => { subtotal += item.cantidad * item.v_unitario; });
+
+            let igv = subtotal * 0.18;
+            let total = subtotal + igv;
+
+            this.totales.op_grabadas = subtotal.toFixed(2);
+            this.totales.igv = igv.toFixed(2);
+            this.totales.total = total.toFixed(2);
+            
+            if (this.formaPago === 'Credito') {
+                this.generarCuotas();
+            } else {
+                this.cuotas = [];
+            }
+        },
+
+        generarCuotas() {
+            this.cuotas = [];
+            if (this.credito.cantidad <= 0 || this.carrito.length === 0) return;
+
+            const tComprobante = parseFloat(this.totales.total);
+            const importeBaseCuota = parseFloat((tComprobante / this.credito.cantidad).toFixed(2));
+            let baseFecha = new Date();
+
+            for (let i = 1; i <= this.credito.cantidad; i++) {
+                baseFecha.setDate(baseFecha.getDate() + this.credito.dias);
+                
+                // Distribución exacta: El residuo de redondeo de céntimos se inyecta en la última cuota para evitar descuadres en Postgres
+                let montoCuota = importeBaseCuota;
+                if (i === this.credito.cantidad) {
+                    montoCuota = parseFloat((tComprobante - (importeBaseCuota * (this.credito.cantidad - 1))).toFixed(2));
+                }
+
+                this.cuotas.push({
+                    fecha: baseFecha.toISOString().split('T')[0],
+                    importe: montoCuota.toFixed(2)
+                });
+            }
+        },
+        
+        ajustarCuotasManual() {
+            // Permite al operador cambiar centavos manualmente si lo desea en la grilla
+        },
+
+        guardarComprobante() {
+            const payload = {
+                cliente_id: this.clienteSeleccionado,
+                forma_pago: this.formaPago,
+                totales: this.totales,
+                items: this.carrito,
+                cuotas: this.cuotas
+            };
+
+            fetch(window.location.href, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert('¡Comprobante ' + data.numeracion + ' emitido exitosamente!\nRespuesta SUNAT: ' + data.mensaje_sunat);
+                    window.location.reload();
+                } else {
+                    alert('Error de Validación: ' + data.error);
+                }
+            });
+        }
+    }
+}
+</script>
+{% endblock %}

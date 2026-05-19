@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+
+<div class="app-content-header">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6"><h1 class="m-0">Catálogo de Clientes</h1></div>
+        </div>
+    </div>
+</div>
+
+<div class="app-content">
+    <div class="container-fluid">
+        <div class="card card-outline card-primary">
+            <div class="card-header">
+                <h3 class="card-title">Clientes Registrados en PostgreSQL</h3>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped vertical-align-middle">
+                    <thead>
+                        <tr>
+                            <th>Tipo Doc.</th>
+                            <th>Nro. Documento</th>
+                            <th>Razón Social / Nombre</th>
+                            <th>Dirección</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cliente in lista_clientes %}
+                        <tr>
+                            <td>{{ cliente.id_tipo_doc.descripcion }}</td>
+                            <td><strong>{{ cliente.nrodoc }}</strong></td>
+                            <td>{{ cliente.razon_social }}</td>
+                            <td>{{ cliente.direccion }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">No hay clientes registrados aún.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

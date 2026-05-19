@@ -16,7 +16,16 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from facturacion.views import dashboard, lista_clientes_view, lista_productos_view, api_facturas, api_boletas
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('', dashboard, name='dashboard'),  # <-- Ruta raíz principal
+    path('clientes/', lista_clientes_view, name='lista_clientes'), # <-- Nueva Ruta
+    path('productos/', lista_productos_view, name='lista_productos'), # <-- Nueva Ruta
+
+    # Endpoints exactos de la rúbrica del docente
+    path('api/facturas/', api_facturas, name='api_facturas'),
+    path('api/boletas/', api_boletas, name='api_boletas'),
 ]
+
