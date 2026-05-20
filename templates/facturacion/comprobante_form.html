@@ -2,14 +2,17 @@
 {% load static %}
 
 {% block content %}
-<div class="app-content py-3" x-data="facturador('{{ tipo_comprobante_id }}')">
+<div class="app-content py-3" x-data="facturador('{{ tipo_comprobante_id }}')" id="facturador-app">
     <div class="container-fluid">
         
         <div class="row mb-4 align-items-center bg-white p-3 rounded shadow-sm border-start border-4"
              :class="isFactura ? 'border-primary' : 'border-success'">
             <div class="col-md-6">
                 <h3 class="mb-0 fw-bold text-dark" x-text="tituloDoc"></h3>
-                <p class="text-muted mb-0 small">Formulario electrónico validado bajo normativas UBL 2.1 - SUNAT</p>
+                <p class="text-muted mb-0 small">
+                    SUNAT - 
+                    <span class="fw-bold" :class="isFactura ? 'text-primary' : 'text-success'" x-text="isFactura ? 'SERVICIO DE FACTURACIÓN ELECTRÓNICA' : 'SERVICIO DE BOLETA'"></span>
+                </p>
             </div>
             <div class="col-md-6 text-md-end mt-2 mt-md-0">
                 <span class="fs-6 px-3 py-2 rounded-pill fw-bold text-white shadow-sm"
@@ -20,32 +23,73 @@
         </div>
 
         <form id="frmVenta" @submit.prevent="guardarComprobante">
+        <form id="frmVenta" onsubmit="return false;">
             {% csrf_token %}
-            <input type="hidden" name="tipo_comprobante" value="{{ tipo_comprobante_id }}">
+            <input type="hidden" name="tipo_comprobante" :value="tipoDocId">
 
             <div class="row g-3">
-                <div class="col-xl-4 col-lg-5">
+                <div class="col-xl-5 col-lg-6">
                     
-                    <div class="card mb-3 shadow-sm border-top-0">
-                        <div class="card-header text-white" :class="isFactura ? 'bg-dark' : 'bg-secondary'">
-                            <h5 class="card-title mb-0 fs-6"><i class="bi bi-person-bounding-box me-2"></i>Datos del Cliente</h5>
+                    <div class="card mb-3 shadow-sm">
+                        <div class="card-header bg-white border-bottom">
+                            <h5 class="card-title mb-0 fs-6 text-dark fw-bold"><i class="bi bi-file-earmark-text-fill me-2"></i>Estructura del Comprobante</h5>
                         </div>
-                        <div class="card-body bg-light-50">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold small text-muted">Buscar o Seleccionar Receptor</label>
-                                <select class="form-select select2-ready shadow-sm" name="cliente" required x-model="clienteSeleccionado" @change="actualizarDatosCliente">
-                                    <option value="">-- Seleccione un Cliente --</option>
-                                    {% for c in clientes %}
-                                        <option value="{{ c.id }}" data-doc="{{ c.nrodoc }}" data-dir="{{ c.direccion|default:'' }}">
-                                            {{ c.nrodoc }} - {{ c.razon_social }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
+                        <div class="card-body bg-white">
+                            
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small text-dark">Tipo Comp.</label>
+                                    <select class="form-select form-select-sm text-dark fw-bold" x-model="tipoDocId" @change="cambiarTipoComprobante">
+                                        <option value="01">FACTURA</option>
+                                        <option value="03">BOLETA</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small text-dark">Tipo Doc. Identidad</label>
+                                    <select class="form-select form-select-sm text-dark fw-bold" x-model="tipoDocumentoCliente" @change="evaluarTipoDocumento">
+                                        <option value="6" x-show="isFactura">RUC</option>
+                                        <option value="1" x-show="!isFactura">DNI</option>
+                                        <option value="0" x-show="!isFactura" :disabled="parseFloat(totales.total) >= 700">SIN DOCUMENTO</option>
+                                    </select>
+                                </div>
                             </div>
+
+                            <div class="row g-2 mb-3">
+                                <div class="col-4">
+                                    <label class="form-label fw-bold small text-dark">Serie</label>
+                                    <input type="text" class="form-control form-control-sm text-center fw-bold text-dark bg-light" x-model="serieSeleccionada" readonly>
+                                </div>
+
+                                <div class="col-8">
+                                    <label class="form-label fw-bold small text-dark">Buscar o Seleccionar Receptor</label>
+                                    <select class="form-select shadow-sm text-dark form-select-sm" name="cliente" id="selectCliente" required x-model="clienteSeleccionado" @change="actualizarDatosCliente">
+                                        <option value="">-- Seleccione un Cliente --</option>
+                                        {% for c in clientes %}
+                                            <option value="{{ c.id }}" data-dir="{{ c.direccion|default:'Sin dirección registrada.' }}" data-doc="{{ c.nrodoc }}" data-nombre="{{ c.razon_social }}">
+                                                {{ c.nrodoc }} - {{ c.razon_social }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                
+                            </div>
+
+                            <div class="row g-2 mb-3">
+                                <div class="col-4">
+                                    <label class="form-label fw-bold small text-dark">Correlativo</label>
+                                    <input type="number" class="form-control form-control-sm bg-light text-center fw-bold text-dark" x-model="correlativo" readonly>
+                                </div>
+                                <div class="col-8">
+                                    <label class="form-label fw-bold small text-dark">Nro. Doc / Nombre</label>
+                                    <input type="text" class="form-control form-control-sm bg-light text-dark small" x-model="clienteData.info_resumen" readonly placeholder="Datos del cliente...">
+                                </div>
+                            </div>
+
                             <div class="mb-1">
-                                <label class="form-label fw-semibold small text-muted">Dirección Fiscal Registrada</label>
-                                <textarea class="form-control form-control-sm bg-white text-dark small" rows="2" x-model="clienteData.direccion" readonly disabled></textarea>
+                                <label class="form-label fw-bold small text-dark">Dirección Fiscal Registrada</label>
+                                <textarea class="form-control form-control-sm bg-light text-dark small" rows="2" x-model="clienteData.direccion" readonly placeholder="Dirección automática..."></textarea>
                             </div>
+
                         </div>
                     </div>
 
@@ -53,15 +97,15 @@
                         <div class="card-header bg-white border-bottom">
                             <h5 class="card-title mb-0 fs-6 text-dark fw-bold"><i class="bi bi-gear-wide-connected me-2"></i>Condiciones de Emisión</h5>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body bg-white">
                             <div class="row g-2">
                                 <div class="col-6">
-                                    <label class="form-label small text-muted">Fecha de Emisión</label>
-                                    <input type="date" class="form-control form-control-sm text-center" name="fecha_emision" value="{% now 'Y-m-d' %}" required>
+                                    <label class="form-label small text-muted fw-bold">Fecha de Emisión</label>
+                                    <input type="date" class="form-control form-control-sm text-center text-dark bg-white" name="fecha_emision" value="{% now 'Y-m-d' %}" required @click="$el.showPicker(); $el.focus()">
                                 </div>
                                 <div class="col-6">
-                                    <label class="form-label small text-muted">Forma de Pago</label>
-                                    <select class="form-select form-select-sm text-center fw-bold" name="forma_pago" x-model="formaPago" @change="calcularTotales">
+                                    <label class="form-label small text-muted fw-bold">Forma de Pago</label>
+                                    <select class="form-select form-select-sm text-center fw-bold text-dark" name="forma_pago" x-model="formaPago" @change="calcularTotales">
                                         <option value="Contado">💵 Contado</option>
                                         <option value="Credito">💳 Crédito</option>
                                     </select>
@@ -72,12 +116,12 @@
                                 <h6 class="text-warning fw-bold small mb-3"><i class="bi bi-calendar3-event me-2"></i>Configuración de Cuotas</h6>
                                 <div class="row g-2 mb-3">
                                     <div class="col-6">
-                                        <label class="form-label x-small text-muted">N° de Cuotas</label>
-                                        <input type="number" class="form-control form-control-sm text-center" x-model.number="credito.cantidad" min="1" @input="generarCuotas">
+                                        <label class="form-label x-small text-muted fw-bold">N° de Cuotas</label>
+                                        <input type="number" class="form-control form-control-sm text-center text-dark" x-model.number="credito.cantidad" min="1" @input="generarCuotas">
                                     </div>
                                     <div class="col-6">
-                                        <label class="form-label x-small text-muted">Intervalo (Días)</label>
-                                        <input type="number" class="form-control form-control-sm text-center" x-model.number="credito.dias" min="1" @input="generarCuotas">
+                                        <label class="form-label x-small text-muted fw-bold">Intervalo (Días)</label>
+                                        <input type="number" class="form-control form-control-sm text-center text-dark" x-model.number="credito.dias" min="1" @input="generarCuotas">
                                     </div>
                                 </div>
 
@@ -90,8 +134,8 @@
                                             <tbody>
                                                 <template x-for="(c, index) in cuotas" :key="index">
                                                     <tr>
-                                                        <td class="align-middle font-monospace" x-text="'C' + (index + 1)"></td>
-                                                        <td><input type="date" class="form-control form-control-sm border-0 bg-transparent text-center" x-model="c.fecha"></td>
+                                                        <td class="align-middle font-monospace text-dark" x-text="'C' + (index + 1)"></td>
+                                                        <td><input type="date" class="form-control form-control-sm border-0 bg-transparent text-center text-dark" x-model="c.fecha" @click="$el.showPicker()"></td>
                                                         <td><input type="number" step="0.01" class="form-control form-control-sm border-0 bg-transparent text-end fw-bold text-primary" x-model.number="c.importe" @input="ajustarCuotasManual"></td>
                                                     </tr>
                                                 </template>
@@ -104,25 +148,29 @@
                     </div>
                 </div>
 
-                <div class="col-xl-8 col-lg-7">
+                <div class="col-xl-7 col-lg-6">
                     
-                    <div class="card mb-3 shadow-sm border-start border-3" :class="isFactura ? 'border-primary' : 'border-success'">
-                        <div class="card-body p-3">
+                    <div class="card mb-3 shadow-sm">
+                        <div class="card-body p-3 bg-white">
                             <div class="row g-2 align-items-end">
-                                <div class="col-md-9">
-                                    <label class="form-label small fw-semibold text-muted mb-1"><i class="bi bi-search me-1"></i> Catálogo de Ítems Registrados</label>
-                                    <select class="form-select" x-model="productoBuscado">
+                                <div class="col-8">
+                                    <label class="form-label small fw-bold text-dark mb-1"><i class="bi bi-search me-1"></i> Catálogo de Ítems Registrados</label>
+                                    <select class="form-select text-dark shadow-sm form-select-sm" id="selectProducto">
                                         <option value="">-- Selecciona el ítem que vas a vender --</option>
                                         {% for p in productos %}
                                             <option value="{{ p.id }}" data-nombre="{{ p.nombre }}" data-precio="{{ p.valor_unitario }}">
-                                                🤘📦 {{ p.nombre }} (S/. {{ p.valor_unitario }})
+                                                📦 {{ p.nombre }} (S/. {{ p.valor_unitario }})
                                             </option>
                                         {% endfor %}
                                     </select>
                                 </div>
-                                <div class="col-md-3">
-                                    <button type="button" class="btn text-white w-100 fw-bold" :class="isFactura ? 'bg-primary' : 'bg-success'" @click="agregarItem">
-                                        <i class="bi bi-cart-plus-fill me-1"></i> Agregar línea
+                                <div class="col-4">
+                                    <button type="button"
+                                            @click="agregarItem()"
+                                            style="height:31px; padding:2px 8px; font-size:13px; font-weight:700;
+                                                   border:none; border-radius:4px; width:100%; cursor:pointer;
+                                                   background-color:#343a40; color:#ffffff; opacity:1 !important;">
+                                        <i class="bi bi-cart-plus-fill me-1"></i> Agregar
                                     </button>
                                 </div>
                             </div>
@@ -143,17 +191,17 @@
                                     </tr>
                                 </thead>
                                 <tbody class="small">
-                                    <template x-for="(item, index) in carrito" :key="item.id">
+                                    <template x-for="(item, index) in carrito" :key="item.uid">
                                         <tr class="text-center">
                                             <td class="font-monospace text-muted" x-text="index + 1"></td>
                                             <td class="text-start fw-bold text-dark" x-text="item.nombre"></td>
-                                            <td class="px-3">
-                                                <input type="number" class="form-control form-control-sm text-center shadow-sm" min="1" step="1" x-model.number="item.cantidad" @input="calcularTotales">
+                                            <td class="px-2">
+                                                <input type="number" class="form-control form-control-sm text-center shadow-sm text-dark fw-bold" style="width: 70px; margin: 0 auto;" min="1" step="1" x-model.number="item.cantidad" @input="calcularTotales">
                                             </td>
-                                            <td class="px-3">
-                                                <div class="input-group input-group-sm shadow-sm">
-                                                    <span class="input-group-text bg-light text-muted">S/.</span>
-                                                    <input type="number" class="form-control text-end" step="0.01" x-model.number="item.v_unitario" @input="calcularTotales">
+                                            <td class="px-2">
+                                                <div class="input-group input-group-sm shadow-sm" style="width: 110px; margin: 0 auto;">
+                                                    <span class="input-group-text bg-light text-muted small">S/.</span>
+                                                    <input type="number" class="form-control text-end text-dark fw-bold" step="0.01" x-model.number="item.v_unitario" @input="calcularTotales">
                                                 </div>
                                             </td>
                                             <td class="fw-bold text-dark text-end pe-3 font-monospace">
@@ -183,15 +231,17 @@
 
                     <div class="row g-2 justify-content-end">
                         <div class="col-md-6 col-lg-5">
-                            <div class="card card-outline border-top-0 border-bottom border-3 shadow-sm" :class="isFactura ? 'border-primary' : 'border-success'">
-                                <div class="card-body p-3 small font-monospace">
+                            <div class="card shadow-sm">
+                                <div class="card-body p-3 small font-monospace bg-white">
                                     <div class="d-flex justify-content-between mb-2 text-muted">
                                         <span>Op. Gravadas (Base):</span>
-                                        <span>S/. <span x-text="totales.op_grabadas"></span></span>
+                                        <span class="text-dark fw-bold">S/. <span x-text="totales.op_grabadas"></span></span>
                                     </div>
+                                    <!-- Solo se muestra en Boleta -->
                                     <div class="d-flex justify-content-between mb-2 text-muted">
-                                        <span>Impuesto IGV (18%):</span>
-                                        <span>S/. <span x-text="totales.igv"></span></span>
+                                        <span x-text="isFactura ? 'Impuesto IGV (18%):' : 'IGV:'"></span>
+                                        <span x-show="isFactura" class="text-dark fw-bold">S/. <span x-text="totales.igv"></span></span>
+                                        <span x-show="!isFactura" class="text-muted fst-italic">No aplica</span>
                                     </div>
                                     <hr class="my-2 bg-secondary opacity-25">
                                     <div class="d-flex justify-content-between align-items-center text-dark">
@@ -203,61 +253,150 @@
                                 </div>
                             </div>
                             <div class="mt-3">
-                                <button type="submit" class="btn btn-lg w-100 fw-bold shadow text-white" 
-                                        :class="isFactura ? 'bg-dark' : 'bg-success'" :disabled="carrito.length === 0">
+                                <button type="submit"
+                                        :disabled="carrito.length === 0"
+                                        class="btn btn-lg w-100 fw-bold shadow-sm"
+                                        style="background-color:#343a40; color:#ffffff; border:none; border-radius:6px; opacity:1 !important;">
                                     <i class="bi bi-cloud-arrow-up-fill me-2"></i> Emitir a SUNAT (Generar XML)
                                 </button>
                             </div>
                         </div>
                     </div>
-
+                    <div class="card p-3 my-3 bg-dark text-warning font-monospace small shadow-sm">
+                        <h6 class="fw-bold border-bottom pb-2 text-white"><i class="bi bi-bug-fill me-2"></i>Consola de Variables Alpine.js (En Vivo)</h6>
+                        <p class="mb-1"><strong>Cliente Seleccionado (ID):</strong> "<span x-text="clienteSeleccionado"></span>"</p>
+                        <p class="mb-1"><strong>Líneas en Carrito:</strong> <span x-text="carrito.length"></span> ítems</p>
+                        <p class="mb-0"><strong>Datos del Payload:</strong></p>
+                        <pre class="text-info bg-black p-2 rounded mt-1" style="max-height: 150px; overflow-y: auto;" x-text="JSON.stringify(carrito, null, 2)"></pre>
+                    </div>
                 </div>
             </div>
         </form>
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
+$(document).ready(function() {
+    $('#selectCliente').on('change', function (e) {
+        // Esperar a que Alpine esté disponible
+        if (typeof Alpine === 'undefined') return;
+        
+        let alpineComponent = Alpine.$data(document.getElementById('facturador-app'));
+        let selectedOption = e.target.options[e.target.selectedIndex];
+        
+        if (selectedOption && selectedOption.value !== "") {
+            // 1. Sincroniza el ID seleccionado
+            alpineComponent.clienteSeleccionado = selectedOption.value;
+            
+            // 2. Sincroniza la Dirección Fiscal
+            alpineComponent.clienteData.direccion = selectedOption.getAttribute('data-dir') || 'Sin dirección registrada.';
+            
+            // 3. ¡AQUÍ ESTÁ EL TRUCO! Inyectamos el Nro Doc y Nombre directamente a la casilla congelada
+            let doc = selectedOption.getAttribute('data-doc') || '';
+            let nombre = selectedOption.getAttribute('data-nombre') || '';
+            alpineComponent.clienteData.info_resumen = doc + ' - ' + nombre;
+            
+        } else {
+            // Si seleccionan el "-- Seleccione un Cliente --", limpiamos todo
+            alpineComponent.limpiarCliente();
+        }
+    });
+});
+
 function facturador(tipoCompId) {
     return {
         tipoDocId: tipoCompId,
         isFactura: tipoCompId === '01',
         tituloDoc: tipoCompId === '01' ? 'Emitir Factura Electrónica' : 'Emitir Boleta de Venta',
         formaPago: 'Contado',
+        tipoDocumentoCliente: tipoCompId === '01' ? '6' : '1',
+        serieSeleccionada: tipoCompId === '01' ? 'F001' : 'B001',
+        correlativo: 48, 
         clienteSeleccionado: '',
         productoBuscado: '',
-        clienteData: { direccion: '' },
+        clienteData: { info_resumen: '', direccion: '' },
         carrito: [],
         cuotas: [],
         credito: { cantidad: 1, dias: 30 },
         totales: { op_grabadas: '0.00', igv: '0.00', total: '0.00' },
+        _uid: 0,
+
+        // PAGA ESTA FUNCIÓN EXACTAMENTE AQUÍ ABAJO:
+        init() {
+            // Esto se ejecuta automáticamente al cargar la página
+            // Fuerza a que jQuery y AdminLTE pongan el combo de clientes en el índice 0 (vacío)
+            this.$nextTick(() => {
+                $('#selectCliente').val('').trigger('change.select2'); 
+                // Si no usas Select2, basta con:
+                document.getElementById('selectCliente').selectedIndex = 0;
+            });
+        },
+
+        cambiarTipoComprobante() {
+            this.isFactura = this.tipoDocId === '01';
+            this.tituloDoc = this.isFactura ? 'Emitir Factura Electrónica' : 'Emitir Boleta de Venta';
+            this.serieSeleccionada = this.isFactura ? 'F001' : 'B001';
+            this.tipoDocumentoCliente = this.isFactura ? '6' : '1';
+            this.limpiarCliente();
+        },
+
+        evaluarTipoDocumento() {
+            if (this.tipoDocumentoCliente === '0') {
+                this.clienteSeleccionado = "ANONIMO";
+                this.clienteData.info_resumen = "00000000 - CLIENTES VARIOS";
+                this.clienteData.direccion = "CHICLAYO - LAMBAYEQUE";
+            } else {
+                this.limpiarCliente();
+            }
+        },
+
+        limpiarCliente() {
+            this.clienteSeleccionado = '';
+            this.clienteData.direccion = '';
+            this.clienteData.info_resumen = '';
+        },
 
         actualizarDatosCliente(e) {
             const select = e.target;
             const option = select.options[select.selectedIndex];
-            this.clienteData.direccion = option.getAttribute('data-dir') || 'Sin dirección registrada en el sistema.';
+            if (option && option.value !== "") {
+                this.clienteData.direccion = option.getAttribute('data-dir') || '';
+                this.clienteData.info_resumen = option.getAttribute('data-doc') + ' - ' + option.getAttribute('data-nombre');
+            } else {
+                this.limpiarCliente();
+            }
         },
 
+        // CORREGIDO: Inyección forzada en la grilla del carrito
         agregarItem() {
-            if (!this.productoBuscado) return;
-            
-            const select = document.querySelector('select[x-model="productoBuscado"]');
-            const option = select.options[select.selectedIndex];
-            
-            const id = this.productoBuscado;
-            const nombre = option.getAttribute('data-nombre');
-            const precio = parseFloat(option.getAttribute('data-precio'));
+            const sel = document.getElementById('selectProducto');
+            if (!sel) return;
 
-            const existe = this.carrito.find(item => item.id === id);
-            if (existe) {
-                existe.cantidad++;
-            } else {
-                this.carrito.push({ id: id, nombre: nombre, v_unitario: precio, cantidad: 1 });
+            const idx = sel.selectedIndex;
+            if (idx <= 0) {
+                alert('Por favor, selecciona un producto.');
+                return;
             }
-            this.productoBuscado = '';
+
+            const opt    = sel.options[idx];
+            // Usar el índice como id único ya que opt.value llega vacío por AdminLTE
+            const id     = String(idx);
+            const nombre = opt.getAttribute('data-nombre') || opt.text;
+            const precio = parseFloat(opt.getAttribute('data-precio')) || 0;
+
+            const existe = this.carrito.findIndex(i => i.id === id);
+            if (existe !== -1) {
+                this.carrito[existe].cantidad += 1;
+            } else {
+                this._uid = (this._uid || 0) + 1;
+                this.carrito.push({ uid: this._uid, id, nombre, v_unitario: precio, cantidad: 1 });
+            }
+
+            sel.selectedIndex = 0;
             this.calcularTotales();
         },
-
         eliminarItem(index) {
             this.carrito.splice(index, 1);
             this.calcularTotales();
@@ -267,13 +406,26 @@ function facturador(tipoCompId) {
             let subtotal = 0;
             this.carrito.forEach(item => { subtotal += item.cantidad * item.v_unitario; });
 
-            let igv = subtotal * 0.18;
-            let total = subtotal + igv;
+            if (this.isFactura) {
+                // Factura: precio sin IGV, se agrega el 18%
+                let igv   = subtotal * 0.18;
+                let total = subtotal + igv;
+                this.totales.op_grabadas = subtotal.toFixed(2);
+                this.totales.igv         = igv.toFixed(2);
+                this.totales.total       = total.toFixed(2);
+            } else {
+                // Boleta: precio ya incluye IGV, no se agrega
+                this.totales.op_grabadas = subtotal.toFixed(2);
+                this.totales.igv         = '0.00';
+                this.totales.total       = subtotal.toFixed(2);
+            }
 
-            this.totales.op_grabadas = subtotal.toFixed(2);
-            this.totales.igv = igv.toFixed(2);
-            this.totales.total = total.toFixed(2);
-            
+            if (!this.isFactura && this.tipoDocumentoCliente === '0' && subtotal >= 700) {
+                alert('⚠️ Las ventas mayores a S/. 700.00 exigen DNI bajo reglamento SUNAT.');
+                this.tipoDocumentoCliente = '1';
+                this.limpiarCliente();
+            }
+
             if (this.formaPago === 'Credito') {
                 this.generarCuotas();
             } else {
@@ -284,20 +436,16 @@ function facturador(tipoCompId) {
         generarCuotas() {
             this.cuotas = [];
             if (this.credito.cantidad <= 0 || this.carrito.length === 0) return;
-
             const tComprobante = parseFloat(this.totales.total);
             const importeBaseCuota = parseFloat((tComprobante / this.credito.cantidad).toFixed(2));
             let baseFecha = new Date();
 
             for (let i = 1; i <= this.credito.cantidad; i++) {
                 baseFecha.setDate(baseFecha.getDate() + this.credito.dias);
-                
-                // Distribución exacta: El residuo de redondeo de céntimos se inyecta en la última cuota para evitar descuadres en Postgres
                 let montoCuota = importeBaseCuota;
                 if (i === this.credito.cantidad) {
                     montoCuota = parseFloat((tComprobante - (importeBaseCuota * (this.credito.cantidad - 1))).toFixed(2));
                 }
-
                 this.cuotas.push({
                     fecha: baseFecha.toISOString().split('T')[0],
                     importe: montoCuota.toFixed(2)
@@ -305,19 +453,50 @@ function facturador(tipoCompId) {
             }
         },
         
-        ajustarCuotasManual() {
-            // Permite al operador cambiar centavos manualmente si lo desea en la grilla
-        },
+        ajustarCuotasManual() {},
 
         guardarComprobante() {
+            // 1. INTENTO A: Leer el value normal
+            let idCliente = $('#selectCliente').val();
+
+            // 2. INTENTO B: Si viene vacío, extraemos el ID directamente del elemento seleccionado en pantalla
+            if (!idCliente || idCliente === "") {
+                const selectNativo = document.getElementById('selectCliente');
+                if (selectNativo && selectNativo.selectedIndex > 0) {
+                    idCliente = selectNativo.options[selectNativo.selectedIndex].value;
+                }
+            }
+
+            // 3. INTENTO C: Si sigue vacío (caso extremo de AdminLTE4), forzamos la lectura mediante jQuery puro del texto
+            if (!idCliente || idCliente === "") {
+                let textoSeleccionado = $('#selectCliente option:selected').text();
+                // Si el texto tiene contenido real y no es el mensaje por defecto
+                if (textoSeleccionado && !textoSeleccionado.includes('-- Seleccione')) {
+                    // Usamos el texto como identificador o el índice actual
+                    idCliente = $('#selectCliente').prop('selectedIndex');
+                }
+            }
+
+            // Sincronizamos con Alpine para que lo veas en la caja negra
+            this.clienteSeleccionado = String(idCliente || "");
+
+            // Validación definitiva
+            if (!this.clienteSeleccionado || this.clienteSeleccionado === "") {
+                return alert('Por favor, identifique un cliente.');
+            }
+
+            // Armamos el payload con el ID rescatado
             const payload = {
                 cliente_id: this.clienteSeleccionado,
                 forma_pago: this.formaPago,
+                tipo_comprobante: this.tipoDocId,
+                serie: this.serieSeleccionada,
                 totales: this.totales,
                 items: this.carrito,
                 cuotas: this.cuotas
             };
 
+            // Envío al servidor
             fetch(window.location.href, {
                 method: 'POST',
                 headers: {
@@ -334,6 +513,10 @@ function facturador(tipoCompId) {
                 } else {
                     alert('Error de Validación: ' + data.error);
                 }
+            })
+            .catch(err => {
+                console.error("Error:", err);
+                alert('Error al comunicarse con el servidor.');
             });
         }
     }

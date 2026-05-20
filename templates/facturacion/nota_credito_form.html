@@ -1,0 +1,349 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="app-content py-3" x-data="notaCredito()" id="nota-credito-app">
+  <div class="container-fluid">
+
+    <!-- Cabecera -->
+    <div class="row mb-4 align-items-center bg-white p-3 rounded shadow-sm border-start border-4 border-danger">
+      <div class="col-md-8">
+        <h3 class="mb-0 fw-bold text-dark"><i class="bi bi-file-earmark-minus-fill me-2 text-danger"></i>Emitir Nota de Crédito</h3>
+        <p class="text-muted mb-0 small">Referencia a comprobante original — Normativa UBL 2.1 SUNAT</p>
+      </div>
+      <div class="col-md-4 text-md-end">
+        <span class="fs-6 px-3 py-2 rounded-pill fw-bold text-white shadow-sm bg-danger">
+          <i class="bi bi-shield-check-fill me-1"></i> Código SUNAT: 07
+        </span>
+      </div>
+    </div>
+
+    <form id="frmNotaCredito" @submit.prevent="guardarNotaCredito">
+      {% csrf_token %}
+      <div class="row g-3">
+
+        <!-- COLUMNA IZQUIERDA -->
+        <div class="col-xl-5 col-lg-6">
+
+          <!-- Buscar Comprobante Original -->
+          <div class="card mb-3 shadow-sm">
+            <div class="card-header bg-white border-bottom">
+              <h5 class="card-title mb-0 fs-6 text-dark fw-bold">
+                <i class="bi bi-search me-2 text-danger"></i>Buscar Comprobante Original
+              </h5>
+            </div>
+            <div class="card-body bg-white">
+              <p class="text-muted small mb-3">Ingresa la serie y número del comprobante a referenciar (solo ACEPTADOS).</p>
+
+              <div class="row g-2 mb-3">
+                <div class="col-5">
+                  <label class="form-label fw-bold small text-dark">Serie</label>
+                  <input type="text" class="form-control form-control-sm text-center fw-bold text-dark"
+                         x-model="busqueda.serie" placeholder="F001 / B001"
+                         @input="limpiarComprobante" maxlength="4"
+                         style="text-transform:uppercase;">
+                </div>
+                <div class="col-5">
+                  <label class="form-label fw-bold small text-dark">Número</label>
+                  <input type="number" class="form-control form-control-sm text-center fw-bold text-dark"
+                         x-model.number="busqueda.numero" placeholder="Ej: 48"
+                         @input="limpiarComprobante" min="1">
+                </div>
+                <div class="col-2 d-flex align-items-end">
+                  <button type="button" @click="buscarComprobante()"
+                          style="height:31px; width:100%; border:none; border-radius:4px;
+                                 background-color:#343a40; color:#fff; font-weight:700;
+                                 font-size:13px; cursor:pointer; opacity:1 !important;">
+                    <i class="bi bi-search"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Resultado de búsqueda -->
+              <div x-show="buscando" class="text-center py-3">
+                <div class="spinner-border spinner-border-sm text-danger" role="status"></div>
+                <span class="ms-2 text-muted small">Buscando...</span>
+              </div>
+
+              <div x-show="errorBusqueda" class="alert alert-danger alert-sm py-2 small mb-0" x-text="errorBusqueda"></div>
+
+              <template x-if="comprobante">
+                <div class="p-3 rounded border border-success bg-light mt-2">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-bold text-dark font-monospace" x-text="comprobante.numeracion"></span>
+                    <span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i>ACEPTADO</span>
+                  </div>
+                  <div class="row g-1 small text-muted">
+                    <div class="col-6"><i class="bi bi-person-fill me-1"></i><span x-text="comprobante.cliente"></span></div>
+                    <div class="col-6"><i class="bi bi-calendar me-1"></i><span x-text="comprobante.fecha"></span></div>
+                    <div class="col-6"><i class="bi bi-cash me-1"></i>Total: <strong class="text-dark" x-text="'S/. ' + comprobante.total"></strong></div>
+                    <div class="col-6"><i class="bi bi-file-earmark me-1"></i><span x-text="comprobante.tipo_display"></span></div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Datos de la Nota -->
+          <div class="card mb-3 shadow-sm">
+            <div class="card-header bg-white border-bottom">
+              <h5 class="card-title mb-0 fs-6 text-dark fw-bold">
+                <i class="bi bi-gear-wide-connected me-2"></i>Datos de la Nota de Crédito
+              </h5>
+            </div>
+            <div class="card-body bg-white">
+              <div class="row g-2 mb-3">
+                <div class="col-6">
+                  <label class="form-label fw-bold small text-dark">Fecha de Emisión</label>
+                  <input type="date" class="form-control form-control-sm text-center text-dark bg-white"
+                         name="fecha_emision" value="{% now 'Y-m-d' %}" required
+                         @click="$el.showPicker()">
+                </div>
+                <div class="col-6">
+                  <label class="form-label fw-bold small text-dark">Serie NC</label>
+                  <input type="text" class="form-control form-control-sm text-center fw-bold text-dark bg-light"
+                         value="FC01" readonly>
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label fw-bold small text-dark">Tipo de Nota de Crédito</label>
+                <select class="form-select form-select-sm text-dark fw-bold" x-model="tipoNota" required>
+                  <option value="">-- Seleccione el motivo --</option>
+                  <option value="01">01 — Anulación de la operación</option>
+                  <option value="02">02 — Anulación por error en el RUC</option>
+                  <option value="03">03 — Corrección por error en la descripción</option>
+                  <option value="04">04 — Descuento global</option>
+                  <option value="05">05 — Descuento por ítem</option>
+                  <option value="06">06 — Devolución total</option>
+                  <option value="07">07 — Devolución por ítem</option>
+                  <option value="08">08 — Bonificación</option>
+                  <option value="13">13 — Ajustes de operaciones de exportación</option>
+                </select>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label fw-bold small text-dark">Motivo / Descripción</label>
+                <textarea class="form-control form-control-sm text-dark" rows="3"
+                          x-model="motivo" placeholder="Describe el motivo de la nota de crédito..."
+                          required maxlength="500"></textarea>
+                <div class="text-end small text-muted mt-1" x-text="motivo.length + '/500 caracteres'"></div>
+              </div>
+
+              <div class="mb-1">
+                <label class="form-label fw-bold small text-dark">Monto Afectado (S/.)</label>
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text bg-light text-muted fw-bold">S/.</span>
+                  <input type="number" step="0.01" class="form-control text-end fw-bold text-dark"
+                         x-model.number="montoAfectado"
+                         :max="comprobante ? comprobante.total : 999999"
+                         placeholder="0.00" required min="0.01">
+                </div>
+                <template x-if="comprobante && montoAfectado > parseFloat(comprobante.total)">
+                  <p class="text-danger small mt-1">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                    El monto no puede superar el total del comprobante (S/. <span x-text="comprobante.total"></span>).
+                  </p>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- COLUMNA DERECHA -->
+        <div class="col-xl-7 col-lg-6">
+
+          <!-- Resumen del comprobante referenciado -->
+          <div class="card mb-3 shadow-sm">
+            <div class="card-header bg-white border-bottom">
+              <h5 class="card-title mb-0 fs-6 text-dark fw-bold">
+                <i class="bi bi-eye-fill me-2 text-danger"></i>Resumen del Comprobante Referenciado
+              </h5>
+            </div>
+            <div class="card-body bg-white">
+              <template x-if="!comprobante">
+                <div class="text-center text-muted py-5">
+                  <i class="bi bi-file-earmark-x display-6 d-block mb-2"></i>
+                  <p class="small">Busca un comprobante para ver su detalle aquí.</p>
+                </div>
+              </template>
+
+              <template x-if="comprobante">
+                <div>
+                  <!-- Info cabecera -->
+                  <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                      <div class="p-2 rounded bg-light border small">
+                        <div class="text-muted mb-1">Comprobante</div>
+                        <div class="fw-bold font-monospace text-dark" x-text="comprobante.numeracion"></div>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="p-2 rounded bg-light border small">
+                        <div class="text-muted mb-1">Cliente</div>
+                        <div class="fw-bold text-dark" x-text="comprobante.cliente"></div>
+                      </div>
+                    </div>
+                    <div class="col-md-4">
+                      <div class="p-2 rounded bg-light border small">
+                        <div class="text-muted mb-1">Op. Gravadas</div>
+                        <div class="fw-bold font-monospace text-dark" x-text="'S/. ' + comprobante.op_grabadas"></div>
+                      </div>
+                    </div>
+                    <div class="col-md-4">
+                      <div class="p-2 rounded bg-light border small">
+                        <div class="text-muted mb-1">IGV</div>
+                        <div class="fw-bold font-monospace text-dark" x-text="'S/. ' + comprobante.igv"></div>
+                      </div>
+                    </div>
+                    <div class="col-md-4">
+                      <div class="p-2 rounded bg-light border small">
+                        <div class="text-muted mb-1">Total</div>
+                        <div class="fw-bold font-monospace text-danger fs-5" x-text="'S/. ' + comprobante.total"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Tabla detalles del comprobante original -->
+                  <div class="table-responsive rounded">
+                    <table class="table table-sm table-hover align-middle mb-0 small">
+                      <thead class="table-dark text-uppercase text-center font-monospace" style="font-size:10px;">
+                        <tr>
+                          <th>#</th>
+                          <th class="text-start">Descripción</th>
+                          <th>Cant.</th>
+                          <th>V.U.</th>
+                          <th>Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <template x-for="(det, i) in comprobante.detalles" :key="i">
+                          <tr class="text-center">
+                            <td class="text-muted font-monospace" x-text="i+1"></td>
+                            <td class="text-start fw-bold text-dark" x-text="det.nombre"></td>
+                            <td x-text="det.cantidad"></td>
+                            <td class="font-monospace" x-text="'S/. ' + det.valor_unitario"></td>
+                            <td class="font-monospace fw-bold" x-text="'S/. ' + det.subtotal"></td>
+                          </tr>
+                        </template>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <!-- Vista previa del monto a afectar -->
+                  <div class="mt-3 p-3 rounded border border-danger bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                      <span class="fw-bold text-dark">Monto a Afectar con esta NC:</span>
+                      <span class="fs-4 fw-bolder text-danger font-monospace">
+                        S/. <span x-text="montoAfectado ? parseFloat(montoAfectado).toFixed(2) : '0.00'"></span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Botón emitir -->
+          <div class="text-end">
+            <button type="submit"
+                    :disabled="!comprobante || !tipoNota || !motivo || !montoAfectado"
+                    style="font-size:1rem; font-weight:700; padding:0.5rem 2rem;
+                           border:none; border-radius:6px; cursor:pointer;
+                           background-color:#343a40; color:#ffffff; opacity:1 !important;">
+              <i class="bi bi-cloud-arrow-up-fill me-2"></i> Emitir Nota de Crédito a SUNAT
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+<script>
+function notaCredito() {
+  return {
+    busqueda:      { serie: '', numero: '' },
+    comprobante:   null,
+    buscando:      false,
+    errorBusqueda: '',
+    tipoNota:      '',
+    motivo:        '',
+    montoAfectado: null,
+
+    limpiarComprobante() {
+      this.comprobante   = null;
+      this.errorBusqueda = '';
+    },
+
+    async buscarComprobante() {
+      if (!this.busqueda.serie || !this.busqueda.numero) {
+        this.errorBusqueda = 'Ingresa la serie y el número del comprobante.';
+        return;
+      }
+      this.buscando      = true;
+      this.errorBusqueda = '';
+      this.comprobante   = null;
+
+      try {
+        const resp = await fetch(
+          `/api/comprobantes/buscar/?serie=${this.busqueda.serie.toUpperCase()}&numero=${this.busqueda.numero}`
+        );
+        const data = await resp.json();
+
+        if (data.encontrado) {
+          if (data.estado !== '1') {
+            this.errorBusqueda = 'Solo se pueden referenciar comprobantes en estado ACEPTADO.';
+          } else {
+            this.comprobante = data;
+          }
+        } else {
+          this.errorBusqueda = 'Comprobante no encontrado. Verifica la serie y el número.';
+        }
+      } catch (e) {
+        this.errorBusqueda = 'Error de conexión al buscar el comprobante.';
+      } finally {
+        this.buscando = false;
+      }
+    },
+
+    async guardarNotaCredito() {
+      if (!this.comprobante) return alert('Busca un comprobante original primero.');
+      if (!this.tipoNota)    return alert('Selecciona el tipo de nota de crédito.');
+      if (!this.motivo)      return alert('Ingresa el motivo.');
+      if (!this.montoAfectado || this.montoAfectado <= 0) return alert('Ingresa un monto válido.');
+      if (this.montoAfectado > parseFloat(this.comprobante.total)) {
+        return alert('El monto no puede superar el total del comprobante original.');
+      }
+
+      const payload = {
+        comprobante_id: this.comprobante.id,
+        tipo_nota:      this.tipoNota,
+        motivo:         this.motivo,
+        monto_afectado: this.montoAfectado,
+      };
+
+      const resp = await fetch('/api/notas-credito/', {
+        method:  'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+
+      if (data.success) {
+        alert('Nota de Crédito ' + data.numeracion + ' emitida exitosamente.\nSUNAT: ' + data.mensaje_sunat);
+        window.location.reload();
+      } else {
+        alert('Error: ' + data.error);
+      }
+    },
+  }
+}
+</script>
+{% endblock %}

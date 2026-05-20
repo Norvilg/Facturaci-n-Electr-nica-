@@ -109,9 +109,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'es-pe'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Lima'
 
 USE_I18N = True
 
@@ -127,3 +127,31 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
+
+
+# Tu porcentaje de IGV
+IGV_PORCENTAJE = 0.18
+
+# Certificado digital (Asegúrate de copiar su archivo .pfx en esta ruta dentro de tu proyecto)
+SUNAT_CERT_PATH = BASE_DIR / 'core/certs/DEMO_Sunat.pfx'
+
+# Rutas físicas donde tu backend guardará los XMLs creados
+MEDIA_ROOT = BASE_DIR / 'storage'
+XML_FIRMADOS_DIR = MEDIA_ROOT / 'xmls' / 'firmados'
+
+# Crear los directorios automáticamente si no existen al levantar tu servidor
+import os
+if not os.path.exists(XML_FIRMADOS_DIR):
+    os.makedirs(XML_FIRMADOS_DIR, exist_ok=True)
+
+
+
+SUNAT_CERT_PATH     = 'ruta/a/tu/certificado.pfx'
+SUNAT_CERT_PASSWORD = 'tu_password'
+SUNAT_CERT_RUC      = '20123456789'
+SUNAT_USUARIO_SOL   = 'MODDATOS'
+SUNAT_CLAVE_SOL     = 'moddatos'
+SUNAT_URL_BETA      = 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService?wsdl'
+IGV_PORCENTAJE      = 0.18
+XML_FIRMADOS_DIR    = BASE_DIR / 'storage/xml'
+CDRS_DIR            = BASE_DIR / 'storage/cdr'

@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="app-content py-3" x-data="facturador('08')" id="facturador-app">
+    <div class="container-fluid">
+        
+        <div class="row mb-4 align-items-center bg-white p-3 rounded shadow-sm border-start border-4 border-indigo">
+            <div class="col-md-6">
+                <h3 class="mb-0 fw-bold text-dark"><i class="bi bi-file-earmark-plus-fill me-2 text-indigo"></i>Emitir Nota de Débito</h3>
+                <p class="text-muted mb-0 small">Aumento de valor electrónico penalizado bajo normativas UBL 2.1 - SUNAT</p>
+            </div>
+            <div class="col-md-6 text-md-end">
+                <span class="fs-6 px-3 py-2 rounded-pill fw-bold text-white shadow-sm bg-indigo" style="background-color: #6610f2;">
+                    <i class="bi bi-shield-check-fill me-1"></i> Código SUNAT: 08
+                </span>
+            </div>
+        </div>
+
+        <form id="frmNotaDebito" @submit.prevent="guardarComprobante">
+            {% csrf_token %}
+            <input type="hidden" name="tipo_comprobante" value="08">
+
+            <div class="row g-3">
+                <div class="col-xl-5 col-lg-6">
+                    <div class="card mb-3 shadow-sm border-top border-indigo border-3">
+                        <div class="card-header bg-white">
+                            <h5 class="card-title mb-0 fs-6 text-dark fw-bold"><i class="bi bi-link-45deg me-2"></i>Documento Referenciado</h5>
+                        </div>
+                        <div class="card-body bg-white">
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small text-dark">Comprobante Base</label>
+                                    <select class="form-select form-select-sm text-dark" required>
+                                        <option value="01">FACTURA ELECTRÓNICA</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small text-dark">Nro. de Documento</label>
+                                    <input type="text" class="form-control form-control-sm text-dark font-monospace" placeholder="F001-00000012" required>
+                                </div>
+                            </div>
+                            <div class="mb-1">
+                                <label class="form-label fw-bold small text-dark">Sustento (Intereses / Penalidades)</label>
+                                <select class="form-select form-select-sm text-dark mb-2" required>
+                                    <option value="1">Interés por mora</option>
+                                    <option value="2">Aumento en el valor de la operación</option>
+                                </select>
+                                <textarea class="form-control form-control-sm text-dark small" rows="2" placeholder="Describa el motivo del cobro adicional..." required></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-3 shadow-sm">
+                        <div class="card-header bg-white">
+                            <h5 class="card-title mb-0 fs-6 text-dark fw-bold"><i class="bi bi-person-bounding-box me-2"></i>Datos del Cliente</h5>
+                        </div>
+                        <div class="card-body bg-white">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small text-dark">Seleccionar Receptor</label>
+                                <select class="form-select shadow-sm text-dark form-select-sm" name="cliente" id="selectCliente" required>
+                                    <option value="">-- Seleccione un Cliente --</option>
+                                    {% for c in clientes %}
+                                        <option value="{{ c.id }}" data-dir="{{ c.direccion|default:'Sin dirección registrada.' }}" data-doc="{{ c.nrodoc }}" data-nombre="{{ c.razon_social }}">
+                                            {{ c.nrodoc }} - {{ c.razon_social }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-1">
+                                <label class="form-label fw-bold small text-dark">Dirección Fiscal</label>
+                                <textarea class="form-control form-control-sm bg-light text-dark small" rows="2" x-model="clienteData.direccion" readonly placeholder="Dirección automática..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-7 col-lg-6">
+                    <div class="card mb-3 shadow-sm bg-white p-3">
+                        <div class="d-flex flex-column flex-sm-row align-items-sm-end gap-2">
+                            <div class="flex-grow-1">
+                                <label class="form-label small fw-bold text-dark mb-1"><i class="bi bi-search me-1"></i> Adicionar concepto de cobro</label>
+                                <select class="form-select text-dark shadow-sm form-select-sm" x-model="productoBuscado" id="selectProducto">
+                                    <option value="">-- Seleccione concepto --</option>
+                                    {% for p in productos %}
+                                        <option value="{{ p.id }}" data-nombre="{{ p.nombre }}" data-precio="{{ p.valor_unitario }}">
+                                            📦 {{ p.nombre }} (S/. {{ p.valor_unitario }})
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div style="min-width: 120px;">
+                                <button type="button" class="btn text-white btn-sm fw-bold w-100 shadow-sm" style="background-color: #343a40; height: 31px;" @click="agregarItem()">
+                                    Agregar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm mb-3 overflow-hidden">
+                        <table class="table table-hover align-middle mb-0 text-nowrap">
+                            <thead class="table-dark small text-uppercase font-monospace text-center">
+                                <tr>
+                                    <th style="width: 5%;">#</th>
+                                    <th class="text-start">Descripción del Concepto</th>
+                                    <th style="width: 15%;">Monto Recargo</th>
+                                    <th style="width: 5%;">M</th>
+                                </tr>
+                            </thead>
+                            <tbody class="small bg-white">
+                                <template x-for="(item, index) in carrito" :key="item.id">
+                                    <tr class="text-center">
+                                        <td class="font-monospace text-muted" x-text="index + 1"></td>
+                                        <td class="text-start fw-bold text-dark" x-text="item.nombre"></td>
+                                        <td><input type="number" class="form-control form-control-sm text-end text-dark fw-bold" style="width: 110px; margin: 0 auto;" step="0.01" x-model.number="item.v_unitario" @input="calcularTotales"></td>
+                                        <td><button type="button" class="btn btn-sm btn-outline-danger border-0 rounded-circle" @click="eliminarItem(index)"><i class="bi bi-trash3-fill"></i></button></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="row g-2 justify-content-end">
+                        <div class="col-md-6 col-lg-5">
+                            <div class="card shadow-sm p-3 small font-monospace bg-white border-top border-3" style="border-color: #6610f2;">
+                                <div class="d-flex justify-content-between mb-2 text-muted"><span>Recargo (Base):</span><span class="text-dark fw-bold">S/. <span x-text="totales.op_grabadas"></span></span></div>
+                                <div class="d-flex justify-content-between mb-2 text-muted"><span>IGV (18%):</span><span class="text-dark fw-bold">S/. <span x-text="totales.igv"></span></span></div>
+                                <hr class="my-2">
+                                <div class="d-flex justify-content-between align-items-center text-dark"><span class="fs-6 fw-bold">Total Nota:</span><span class="fs-5 fw-bolder" style="color: #6610f2;">S/. <span x-text="totales.total"></span></span></div>
+                            </div>
+                            <div class="mt-3">
+                                <button type="submit" class="btn btn-dark btn-lg w-100 fw-bold shadow text-white" :disabled="carrito.length === 0">
+                                    <i class="bi bi-cloud-arrow-up-fill me-2"></i> Emitir Nota Débito
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+$(document).ready(function() {
+    $('#selectCliente').on('change', function (e) {
+        let alpineComponent = Alpine.$data(document.getElementById('facturador-app'));
+        let selectedOption = e.target.options[e.target.selectedIndex];
+        if (selectedOption && selectedOption.value !== "") {
+            alpineComponent.clienteSeleccionado = selectedOption.value;
+            alpineComponent.clienteData.direccion = selectedOption.getAttribute('data-dir') || '';
+        } else {
+            alpineComponent.limpiarCliente();
+        }
+    });
+});
+
+function facturador(tipoCompId) {
+    return {
+        tipoDocId: tipoCompId,
+        productoBuscado: '',
+        clienteSeleccionado: '',
+        clienteData: { direccion: '' },
+        carrito: [],
+        totales: { op_grabadas: '0.00', igv: '0.00', total: '0.00' },
+        limpiarCliente() { this.clienteSeleccionado = ''; this.clienteData.direccion = ''; },
+        agregarItem() {
+            if (!this.productoBuscado) return;
+            const select = document.getElementById('selectProducto');
+            const option = select.options[select.selectedIndex];
+            if (!option) return;
+            this.carrito.push({ id: this.productoBuscado, nombre: option.getAttribute('data-nombre'), v_unitario: parseFloat(option.getAttribute('data-precio')), cantidad: 1 });
+            this.productoBuscado = '';
+            this.calcularTotales();
+        },
+        eliminarItem(index) { this.carrito.splice(index, 1); this.calcularTotales(); },
+        calcularTotales() {
+            let subtotal = 0;
+            this.carrito.forEach(item => { subtotal += item.v_unitario; });
+            let igv = subtotal * 0.18;
+            this.totales.op_grabadas = subtotal.toFixed(2);
+            this.totales.igv = igv.toFixed(2);
+            this.totales.total = (subtotal + igv).toFixed(2);
+        }
+    }
+}
+</script>
+{% endblock %}
