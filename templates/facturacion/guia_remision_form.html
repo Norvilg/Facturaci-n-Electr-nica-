@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="app-content py-3" x-data="facturador('09')" id="facturador-app">
+    <div class="container-fluid">
+        
+        <div class="row mb-4 align-items-center bg-white p-3 rounded shadow-sm border-start border-4 border-info">
+            <div class="col-md-6">
+                <h3 class="mb-0 fw-bold text-dark"><i class="bi bi-truck me-2 text-info"></i>Emitir Guía de Remisión Remitente</h3>
+                <p class="text-muted mb-0 small">Sustento de traslado de bienes regulado bajo estándar UBL 2.1 - SUNAT</p>
+            </div>
+            <div class="col-md-6 text-md-end">
+                <span class="fs-6 px-3 py-2 rounded-pill fw-bold text-white shadow-sm bg-info">
+                    <i class="bi bi-shield-check-fill me-1"></i> Código SUNAT: 09
+                </span>
+            </div>
+        </div>
+
+        <form id="frmGuia" @submit.prevent="guardarComprobante">
+            {% csrf_token %}
+            <div class="row g-3">
+                
+                <div class="col-xl-5 col-lg-6">
+                    <div class="card mb-3 shadow-sm border-top border-info border-3">
+                        <div class="card-header bg-white">
+                            <h5 class="card-title mb-0 fs-6 text-dark fw-bold"><i class="bi bi-geo-alt-fill me-2"></i>Configuración de Envío / Ruta</h5>
+                        </div>
+                        <div class="card-body bg-white">
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small text-dark">Motivo Traslado</label>
+                                    <select class="form-select form-select-sm text-dark" required>
+                                        <option value="1">Venta</option>
+                                        <option value="2">Compra</option>
+                                        <option value="4">Traslado entre establecimientos</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small text-dark">Modalidad Transporte</label>
+                                    <select class="form-select form-select-sm text-dark" required>
+                                        <option value="1">Transporte Público</option>
+                                        <option value="2">Transporte Privado</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small text-dark">Peso Bruto Total (KGM)</label>
+                                    <input type="number" step="0.01" class="form-control form-control-sm text-dark font-monospace" placeholder="0.00" required>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small text-dark">Número de Paquetes</label>
+                                    <input type="number" class="form-control form-control-sm text-dark text-center font-monospace" value="1" required>
+                                </div>
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="form-label fw-bold small text-dark">Punto de Partida (Dirección Completa)</label>
+                                <input type="text" class="form-control form-control-sm text-dark small" placeholder="Dirección del almacén de origen..." required>
+                            </div>
+                            <div class="mb-1">
+                                <label class="form-label fw-bold small text-dark">Punto de Llegada (Dirección Destino)</label>
+                                <input type="text" class="form-control form-control-sm text-dark small" placeholder="Dirección fiscal del destinatario..." required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-3 shadow-sm">
+                        <div class="card-header bg-white">
+                            <h5 class="card-title mb-0 fs-6 text-dark fw-bold"><i class="bi bi-person-badge-fill me-2"></i>Datos del Destinatario</h5>
+                        </div>
+                        <div class="card-body bg-white">
+                            <label class="form-label fw-bold small text-dark">Buscar o Seleccionar Destinatario</label>
+                            <select class="form-select shadow-sm text-dark form-select-sm" name="cliente" required>
+                                <option value="">-- Seleccione un Cliente --</option>
+                                {% for c in clientes %}
+                                    <option value="{{ c.id }}">{{ c.nrodoc }} - {{ c.razon_social }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-7 col-lg-6">
+                    <div class="card mb-3 shadow-sm bg-white p-3">
+                        <div class="d-flex flex-column flex-sm-row align-items-sm-end gap-2">
+                            <div class="flex-grow-1">
+                                <label class="form-label small fw-bold text-dark mb-1"><i class="bi bi-box-seam"></i> Ítems a despachar en el camión</label>
+                                <select class="form-select text-dark shadow-sm form-select-sm" x-model="productoBuscado" id="selectProducto">
+                                    <option value="">-- Selecciona el producto --</option>
+                                    {% for p in productos %}
+                                        <option value="{{ p.id }}" data-nombre="{{ p.nombre }}">📦 {{ p.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div style="min-width: 120px;">
+                                <button type="button" class="btn btn-info btn-sm fw-bold text-white w-100 shadow-sm" style="height: 31px;" @click="agregarItem()">
+                                    <i class="bi bi-cart-plus-fill me-1"></i> Cargar ítem
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm mb-3 overflow-hidden">
+                        <table class="table table-hover align-middle mb-0 text-nowrap">
+                            <thead class="table-dark small text-uppercase font-monospace text-center">
+                                <tr>
+                                    <th style="width: 5%;">#</th>
+                                    <th class="text-start">Descripción del Ítem</th>
+                                    <th style="width: 20%;">Cantidad a Enviar</th>
+                                    <th style="width: 5%;">M</th>
+                                </tr>
+                            </thead>
+                            <tbody class="small bg-white">
+                                <template x-for="(item, index) in carrito" :key="item.id">
+                                    <tr class="text-center">
+                                        <td class="font-monospace text-muted" x-text="index + 1"></td>
+                                        <td class="text-start fw-bold text-dark" x-text="item.nombre"></td>
+                                        <td><input type="number" class="form-control form-control-sm text-center shadow-sm text-dark fw-bold" style="width: 85px; margin: 0 auto;" min="1" x-model.number="item.cantidad"></td>
+                                        <td><button type="button" class="btn btn-sm btn-outline-danger border-0 rounded-circle" @click="eliminarItem(index)"><i class="bi bi-trash3-fill"></i></button></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-dark btn-lg fw-bold shadow text-white px-5" :disabled="carrito.length === 0">
+                            <i class="bi bi-cloud-arrow-up-fill me-2"></i> Generar Guía Remisión
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function facturador(tipoCompId) {
+    return {
+        tipoDocId: tipoCompId,
+        productoBuscado: '',
+        carrito: [],
+        agregarItem() {
+            if (!this.productoBuscado) return;
+            const select = document.getElementById('selectProducto');
+            const option = select.options[select.selectedIndex];
+            if (!option) return;
+            this.carrito.push({ id: this.productoBuscado, nombre: option.getAttribute('data-nombre'), cantidad: 1 });
+            this.productoBuscado = '';
+        },
+        eliminarItem(index) { this.carrito.splice(index, 1); }
+    }
+}
+</script>
+{% endblock %}

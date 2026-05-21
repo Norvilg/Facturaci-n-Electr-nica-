@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+
+<div class="app-content-header">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6"><h1 class="m-0">Catálogo de Productos y Servicios</h1></div>
+        </div>
+    </div>
+</div>
+
+<div class="app-content">
+    <div class="container-fluid">
+        <div class="card card-outline card-primary">
+            <div class="card-header">
+                <h3 class="card-title">Productos Registrados en PostgreSQL</h3>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped vertical-align-middle">
+                    <thead>
+                        <tr>
+                            <th>Nombre / Descripción</th>
+                            <th>Valor Unitario</th>
+                            <th>Código SUNAT</th>
+                            <th>Tipo Afectación</th>
+                            <th>U. Medida</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for producto in lista_productos %}
+                        <tr>
+                            <td>
+                                <strong>{{ producto.nombre }}</strong>
+                                <br>
+                                <!-- Identificador dinámico de tipo comercial -->
+                                {% if producto.id_unidad.descripcion == 'ZZ' %}
+                                    <span class="badge bg-info">Servicio</span>
+                                {% else %}
+                                    <span class="badge bg-success">Producto</span>
+                                {% endif %}
+                            </td>
+                            <td>S/ {{ producto.valor_unitario }}</td>
+                            <td>{{ producto.codigo_sunat }}</td>
+                            <td>{{ producto.id_tipo_afectacion.descripcion }}</td>
+                            <td>{{ producto.id_unidad.descripcion }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">No hay productos registrados aún.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>E
+
+{% endblock %}
