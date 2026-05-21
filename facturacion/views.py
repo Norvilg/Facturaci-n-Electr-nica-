@@ -20,6 +20,7 @@ from .models import (
     Cliente, Producto, Comprobante, Detalle,
     Serie, Emisor, Moneda, TipoComprobante, Cuota
 )
+
 from .services_sunat import procesar_comprobante_completo
 
 
@@ -37,9 +38,18 @@ def _get_emisor_activo() -> Emisor:
 
 def _get_moneda_soles() -> Moneda:
     """Retorna la moneda PEN/Soles."""
-    return Moneda.objects.filter(
-        descripcion__icontains='sol'
-    ).first() or Moneda.objects.first()
+    # Intentamos buscar por descripción que contenga 'sol'
+    moneda = Moneda.objects.filter(descripcion__icontains='sol').first()
+    if moneda:
+        return moneda
+        
+    # Si no la encuentra, intentamos buscar por el código estándar 'PEN'
+    moneda_pen = Moneda.objects.filter(id_moneda='PEN').first() # ajusta si el campo se llama código
+    if moneda_pen:
+        return moneda_pen
+
+    # Como último recurso para evitar el NULL, retornamos el primer registro que exista en la tabla
+    return Moneda.objects.first()
 
 
 def _get_tipo_comprobante(codigo: str) -> TipoComprobante:
@@ -200,7 +210,10 @@ def _procesar_emision(request, tipo_codigo: str):
                     )
 
             # ── 7. Llamar al adaptador → Motor SUNAT del compañero ────────────
-            resultado = {'estado': 'ACEPTADO', 'descripcion': 'Simulado correctamente sin XML'}
+            #resultado = {'estado': 'ACEPTADO', 'descripcion': 'Simulado correctamente sin XML'}
+
+            # 🔥 ACTIVAMOS EL ENVÍO REAL PASÁNDOLE LOS DATOS QUE ACABAMOS DE GUARDAR:
+            resultado = procesar_comprobante_completo(comprobante, detalles_guardados)
 
         # ── 8. Respuesta al frontend Alpine.js ───────────────────────────────
         numeracion = f"{serie.serie}-{correlativo:08d}"

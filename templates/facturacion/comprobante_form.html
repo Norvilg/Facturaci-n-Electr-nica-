@@ -59,7 +59,6 @@
                                     <label class="form-label fw-bold small text-dark">Serie</label>
                                     <input type="text" class="form-control form-control-sm text-center fw-bold text-dark bg-light" x-model="serieSeleccionada" readonly>
                                 </div>
-
                                 <div class="col-8">
                                     <label class="form-label fw-bold small text-dark">Buscar o Seleccionar Receptor</label>
                                     <select class="form-select shadow-sm text-dark form-select-sm" name="cliente" id="selectCliente" required x-model="clienteSeleccionado" @change="actualizarDatosCliente">
@@ -71,7 +70,6 @@
                                         {% endfor %}
                                     </select>
                                 </div>
-                                
                             </div>
 
                             <div class="row g-2 mb-3">
@@ -245,7 +243,7 @@
                                     </div>
                                     <hr class="my-2 bg-secondary opacity-25">
                                     <div class="d-flex justify-content-between align-items-center text-dark">
-                                        <span class="fs-5 fw-bold">Importe Total:</span>
+                                        <span class="fs-5 fw-bold"> Total:</span>
                                         <span class="fs-4 fw-bolder" :class="isFactura ? 'text-primary' : 'text-success'">
                                             S/. <span x-text="totales.total"></span>
                                         </span>
@@ -262,6 +260,7 @@
                             </div>
                         </div>
                     </div>
+                    <!--
                     <div class="card p-3 my-3 bg-dark text-warning font-monospace small shadow-sm">
                         <h6 class="fw-bold border-bottom pb-2 text-white"><i class="bi bi-bug-fill me-2"></i>Consola de Variables Alpine.js (En Vivo)</h6>
                         <p class="mb-1"><strong>Cliente Seleccionado (ID):</strong> "<span x-text="clienteSeleccionado"></span>"</p>
@@ -269,6 +268,7 @@
                         <p class="mb-0"><strong>Datos del Payload:</strong></p>
                         <pre class="text-info bg-black p-2 rounded mt-1" style="max-height: 150px; overflow-y: auto;" x-text="JSON.stringify(carrito, null, 2)"></pre>
                     </div>
+                    -->
                 </div>
             </div>
         </form>
@@ -287,19 +287,10 @@ $(document).ready(function() {
         let selectedOption = e.target.options[e.target.selectedIndex];
         
         if (selectedOption && selectedOption.value !== "") {
-            // 1. Sincroniza el ID seleccionado
             alpineComponent.clienteSeleccionado = selectedOption.value;
-            
-            // 2. Sincroniza la Dirección Fiscal
             alpineComponent.clienteData.direccion = selectedOption.getAttribute('data-dir') || 'Sin dirección registrada.';
-            
-            // 3. ¡AQUÍ ESTÁ EL TRUCO! Inyectamos el Nro Doc y Nombre directamente a la casilla congelada
-            let doc = selectedOption.getAttribute('data-doc') || '';
-            let nombre = selectedOption.getAttribute('data-nombre') || '';
-            alpineComponent.clienteData.info_resumen = doc + ' - ' + nombre;
-            
+            alpineComponent.clienteData.info_resumen = selectedOption.getAttribute('data-doc') + ' - ' + selectedOption.getAttribute('data-nombre');
         } else {
-            // Si seleccionan el "-- Seleccione un Cliente --", limpiamos todo
             alpineComponent.limpiarCliente();
         }
     });
@@ -323,17 +314,35 @@ function facturador(tipoCompId) {
         totales: { op_grabadas: '0.00', igv: '0.00', total: '0.00' },
         _uid: 0,
 
-        // PAGA ESTA FUNCIÓN EXACTAMENTE AQUÍ ABAJO:
+        // PEGA ESTA FUNCIÓN INIT EXACTAMENTE AQUÍ:
         init() {
-            // Esto se ejecuta automáticamente al cargar la página
-            // Fuerza a que jQuery y AdminLTE pongan el combo de clientes en el índice 0 (vacío)
+            // 👇 ¡ESTA ES LA LÍNEA MÁGICA QUE TE FALTA! Fuerza al select a arrancar en la opción 0
             this.$nextTick(() => {
-                $('#selectCliente').val('').trigger('change.select2'); 
-                // Si no usas Select2, basta con:
-                document.getElementById('selectCliente').selectedIndex = 0;
+                const selectNativo = document.getElementById('selectCliente');
+                if (selectNativo) selectNativo.selectedIndex = 0;
+            });
+
+            // El $watch que ya tienes y funciona bien:
+            this.$watch('clienteSeleccionado', (valor) => {
+                if (!valor || valor === "") {
+                    this.limpiarCliente();
+                    return;
+                }
+
+                const selectNativo = document.getElementById('selectCliente');
+                if (selectNativo) {
+                    const opcionEncontrada = Array.from(selectNativo.options).find(opt => opt.value === valor);
+                    if (opcionEncontrada) {
+                        const doc = opcionEncontrada.getAttribute('data-doc') || '';
+                        const nombre = opcionEncontrada.getAttribute('data-nombre') || '';
+                        const dir = opcionEncontrada.getAttribute('data-dir') || 'Sin dirección registrada.';
+                        
+                        this.clienteData.direccion = dir;
+                        this.clienteData.info_resumen = doc + ' - ' + nombre;
+                    }
+                }
             });
         },
-
         cambiarTipoComprobante() {
             this.isFactura = this.tipoDocId === '01';
             this.tituloDoc = this.isFactura ? 'Emitir Factura Electrónica' : 'Emitir Boleta de Venta';
@@ -493,7 +502,8 @@ function facturador(tipoCompId) {
                 serie: this.serieSeleccionada,
                 totales: this.totales,
                 items: this.carrito,
-                cuotas: this.cuotas
+                cuotas: this.cuotas,
+                moneda_id: 1
             };
 
             // Envío al servidor
