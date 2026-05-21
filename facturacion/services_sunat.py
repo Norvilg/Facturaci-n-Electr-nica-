@@ -227,7 +227,7 @@ def procesar_comprobante_completo(tu_comprobante, tus_detalles) -> dict:
         
         # Importamos el services.py del compañero
         # (debe estar copiado como services_companero.py en tu app)
-        from . import services_companero as svc
+        from . import generarXmlFirmar as svc
 
         resultado = svc.enviar_a_sunat(proxy)
 
