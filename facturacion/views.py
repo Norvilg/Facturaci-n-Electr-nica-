@@ -14,7 +14,11 @@ from decimal import Decimal
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.db import transaction
+from django.db.models import Sum, Count, Q
+from django.db.models.functions import TruncMonth
 from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
+from datetime import timedelta
 
 from .models import (
     Cliente, Producto, Comprobante, Detalle,
@@ -299,9 +303,120 @@ def api_guias_remision(request):
     return _procesar_emision(request, tipo_codigo='09')
 
 
+def _contar_comprobantes_por_tipo(*palabras_clave: str) -> int:
+    """Cuenta comprobantes cuyo tipo contiene alguna de las palabras clave."""
+    if not palabras_clave:
+        return 0
+    filtro = Q()
+    for palabra in palabras_clave:
+        filtro |= Q(id_tipo_comprobante__descripcion__icontains=palabra)
+    return Comprobante.objects.filter(filtro).count()
+
+
 def dashboard(request):
-    """Panel principal."""
-    return render(request, 'base.html')
+    """Panel principal con indicadores de la rúbrica del docente."""
+    hoy = timezone.now().date()
+    inicio_mes = hoy.replace(day=1)
+
+    total_clientes = Cliente.objects.count()
+    total_productos = Producto.objects.count()
+    total_comprobantes = Comprobante.objects.count()
+    aceptados = Comprobante.objects.filter(estado_comprobante='1').count()
+    rechazados = Comprobante.objects.filter(estado_comprobante='2').count()
+    pendientes = Comprobante.objects.filter(
+        Q(estado_comprobante='0') | Q(estado_comprobante__isnull=True)
+    ).count()
+
+    ventas_mes = Comprobante.objects.filter(
+        fecha_emision__gte=inicio_mes,
+        estado_comprobante='1',
+    ).aggregate(total=Sum('total'))['total'] or 0
+
+    emisor = Emisor.objects.first()
+
+    por_tipo = {
+        'facturas': _contar_comprobantes_por_tipo('factura'),
+        'boletas': _contar_comprobantes_por_tipo('boleta'),
+        'notas_credito': _contar_comprobantes_por_tipo('crédito', 'credito'),
+        'notas_debito': _contar_comprobantes_por_tipo('débito', 'debito'),
+        'guias': _contar_comprobantes_por_tipo('guía', 'guia', 'remisión', 'remision'),
+    }
+
+    ultimos_comprobantes = (
+        Comprobante.objects
+        .select_related('id_cliente', 'id_tipo_comprobante')
+        .order_by('-fecha_emision', '-correlativo')[:8]
+    )
+
+    hace_seis_meses = hoy - timedelta(days=180)
+    ventas_por_mes = (
+        Comprobante.objects
+        .filter(fecha_emision__gte=hace_seis_meses, estado_comprobante='1')
+        .annotate(mes=TruncMonth('fecha_emision'))
+        .values('mes')
+        .annotate(monto=Sum('total'), cantidad=Count('id_comprobante'))
+        .order_by('mes')
+    )
+
+    chart_labels = []
+    chart_montos = []
+    for fila in ventas_por_mes:
+        if fila['mes']:
+            chart_labels.append(fila['mes'].strftime('%b %Y'))
+            chart_montos.append(float(fila['monto'] or 0))
+
+    modulos_docente = [
+        {
+            'nombre': 'Factura electrónica',
+            'codigo': '01',
+            'url': 'api_facturas',
+            'icono': 'bi-file-earmark-text',
+            'cantidad': por_tipo['facturas'],
+        },
+        {
+            'nombre': 'Boleta de venta',
+            'codigo': '03',
+            'url': 'api_boletas',
+            'icono': 'bi-receipt',
+            'cantidad': por_tipo['boletas'],
+        },
+        {
+            'nombre': 'Nota de crédito',
+            'codigo': '07',
+            'url': 'api_notas_credito',
+            'icono': 'bi-file-earmark-minus',
+            'cantidad': por_tipo['notas_credito'],
+        },
+        {
+            'nombre': 'Nota de débito',
+            'codigo': '08',
+            'url': 'api_notas_debito',
+            'icono': 'bi-file-earmark-plus',
+            'cantidad': por_tipo['notas_debito'],
+        },
+        {
+            'nombre': 'Guía de remisión',
+            'codigo': '09',
+            'url': 'api_guias_remision',
+            'icono': 'bi-truck',
+            'cantidad': por_tipo['guias'],
+        },
+    ]
+
+    return render(request, 'facturacion/dashboard.html', {
+        'total_clientes': total_clientes,
+        'total_productos': total_productos,
+        'total_comprobantes': total_comprobantes,
+        'aceptados': aceptados,
+        'rechazados': rechazados,
+        'pendientes': pendientes,
+        'ventas_mes': ventas_mes,
+        'emisor': emisor,
+        'modulos_docente': modulos_docente,
+        'ultimos_comprobantes': ultimos_comprobantes,
+        'chart_labels_json': json.dumps(chart_labels, ensure_ascii=False),
+        'chart_montos_json': json.dumps(chart_montos),
+    })
 
 
 def lista_clientes_view(request):

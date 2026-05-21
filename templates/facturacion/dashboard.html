@@ -1,0 +1,291 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row align-items-center">
+      <div class="col-sm-6">
+        <h3 class="mb-0">Panel Principal</h3>
+        <p class="text-muted mb-0 small">Sistema de Facturación Electrónica — UBL 2.1 / SUNAT</p>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end mb-0">
+          <li class="breadcrumb-item active" aria-current="page">Dashboard</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+
+    <!-- Indicadores generales -->
+    <div class="row">
+      <div class="col-lg-3 col-6">
+        <div class="small-box text-bg-primary">
+          <div class="inner">
+            <h3>{{ total_clientes }}</h3>
+            <p>Clientes registrados</p>
+          </div>
+          <i class="small-box-icon bi bi-people-fill"></i>
+          <a href="{% url 'lista_clientes' %}" class="small-box-footer link-light link-underline-opacity-0 link-underline-opacity-50-hover">
+            Ver catálogo <i class="bi bi-link-45deg"></i>
+          </a>
+        </div>
+      </div>
+      <div class="col-lg-3 col-6">
+        <div class="small-box text-bg-info">
+          <div class="inner">
+            <h3>{{ total_productos }}</h3>
+            <p>Productos / servicios</p>
+          </div>
+          <i class="small-box-icon bi bi-tags-fill"></i>
+          <a href="{% url 'lista_productos' %}" class="small-box-footer link-light link-underline-opacity-0 link-underline-opacity-50-hover">
+            Ver catálogo <i class="bi bi-link-45deg"></i>
+          </a>
+        </div>
+      </div>
+      <div class="col-lg-3 col-6">
+        <div class="small-box text-bg-success">
+          <div class="inner">
+            <h3>{{ total_comprobantes }}</h3>
+            <p>Comprobantes emitidos</p>
+          </div>
+          <i class="small-box-icon bi bi-file-earmark-check-fill"></i>
+          <span class="small-box-footer text-white-50">Total histórico</span>
+        </div>
+      </div>
+      <div class="col-lg-3 col-6">
+        <div class="small-box text-bg-warning">
+          <div class="inner">
+            <h3>S/ {{ ventas_mes|floatformat:2 }}</h3>
+            <p>Ventas aceptadas (mes)</p>
+          </div>
+          <i class="small-box-icon bi bi-currency-dollar"></i>
+          <span class="small-box-footer text-dark">Solo comprobantes SUNAT aceptados</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Estado SUNAT -->
+    <div class="row mb-2">
+      <div class="col-md-4">
+        <div class="info-box">
+          <span class="info-box-icon text-bg-success"><i class="bi bi-check-circle-fill"></i></span>
+          <div class="info-box-content">
+            <span class="info-box-text">Aceptados por SUNAT</span>
+            <span class="info-box-number">{{ aceptados }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="info-box">
+          <span class="info-box-icon text-bg-danger"><i class="bi bi-x-circle-fill"></i></span>
+          <div class="info-box-content">
+            <span class="info-box-text">Rechazados</span>
+            <span class="info-box-number">{{ rechazados }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="info-box">
+          <span class="info-box-icon text-bg-secondary"><i class="bi bi-hourglass-split"></i></span>
+          <div class="info-box-content">
+            <span class="info-box-text">Pendientes / borrador</span>
+            <span class="info-box-number">{{ pendientes }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <!-- Módulos exigidos por la rúbrica (endpoints API) -->
+      <div class="col-lg-7">
+        <div class="card mb-4">
+          <div class="card-header">
+            <h3 class="card-title mb-0">
+              <i class="bi bi-cloud-upload me-1"></i> Emisión de comprobantes (rúbrica)
+            </h3>
+          </div>
+          <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Cód. SUNAT</th>
+                  <th>Documento</th>
+                  <th class="text-center">Emitidos</th>
+                  <th class="text-end">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for mod in modulos_docente %}
+                <tr>
+                  <td><span class="badge text-bg-dark">{{ mod.codigo }}</span></td>
+                  <td>
+                    <i class="bi {{ mod.icono }} me-1 text-primary"></i>
+                    {{ mod.nombre }}
+                  </td>
+                  <td class="text-center">{{ mod.cantidad }}</td>
+                  <td class="text-end">
+                    <a href="{% url mod.url %}" class="btn btn-sm btn-primary">
+                      <i class="bi bi-plus-lg me-1"></i> Emitir
+                    </a>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="card-footer text-muted small">
+            Endpoints: <code>/api/facturas/</code>,
+            <code>/api/boletas/</code>,
+            <code>/api/notas-credito/</code>,
+            <code>/api/notas-debito/</code>,
+            <code>/api/guias-remision/</code>
+          </div>
+        </div>
+
+        <!-- Gráfico ventas -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <h3 class="card-title mb-0">Ventas aceptadas por mes</h3>
+          </div>
+          <div class="card-body">
+            <div id="ventas-chart" style="min-height: 280px;"></div>
+            {% if not chart_labels %}
+            <p class="text-center text-muted mb-0 py-4">Aún no hay ventas aceptadas para graficar.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Emisor + procesos SUNAT + catálogos -->
+      <div class="col-lg-5">
+        <div class="card card-outline card-primary mb-4">
+          <div class="card-header">
+            <h3 class="card-title mb-0"><i class="bi bi-building me-1"></i> Datos del emisor</h3>
+          </div>
+          <div class="card-body">
+            {% if emisor %}
+            <dl class="row mb-0 small">
+              <dt class="col-4">RUC</dt>
+              <dd class="col-8"><strong>{{ emisor.ruc }}</strong></dd>
+              <dt class="col-4">Razón social</dt>
+              <dd class="col-8">{{ emisor.razon_social }}</dd>
+              <dt class="col-4">Comercial</dt>
+              <dd class="col-8">{{ emisor.nombre_comercial }}</dd>
+              <dt class="col-4">IGV</dt>
+              <dd class="col-8">{{ emisor.porcetajeigv }}%</dd>
+              <dt class="col-4">Usuario SOL</dt>
+              <dd class="col-8">{{ emisor.usuario_sol }}</dd>
+            </dl>
+            {% else %}
+            <p class="text-muted mb-0">Configure el emisor en la base de datos para emitir comprobantes.</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">
+            <h3 class="card-title mb-0"><i class="bi bi-list-check me-1"></i> Módulos del sistema</h3>
+          </div>
+          <ul class="list-group list-group-flush">
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span><i class="bi bi-file-earmark-text text-primary me-2"></i>Comprobantes electrónicos</span>
+              <span class="badge text-bg-primary">5 tipos</span>
+            </li>
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span><i class="bi bi-cloud-arrow-up text-info me-2"></i>Procesos SUNAT</span>
+              <span class="badge text-bg-secondary">Resúmenes / Bajas</span>
+            </li>
+            <li class="list-group-item">
+              <a href="{% url 'lista_clientes' %}" class="text-decoration-none">
+                <i class="bi bi-people-fill text-success me-2"></i>Catálogo de clientes
+              </a>
+            </li>
+            <li class="list-group-item">
+              <a href="{% url 'lista_productos' %}" class="text-decoration-none">
+                <i class="bi bi-box-seam-fill text-warning me-2"></i>Catálogo de productos
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Últimos comprobantes -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <h3 class="card-title mb-0">Últimos comprobantes</h3>
+          </div>
+          <div class="card-body p-0">
+            <table class="table table-sm table-striped mb-0">
+              <thead>
+                <tr>
+                  <th>Documento</th>
+                  <th>Cliente</th>
+                  <th class="text-end">Total</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for c in ultimos_comprobantes %}
+                <tr>
+                  <td class="text-nowrap">
+                    <small>{{ c.serie }}-{{ c.correlativo|stringformat:"08d" }}</small>
+                  </td>
+                  <td><small>{{ c.id_cliente.razon_social|truncatechars:18 }}</small></td>
+                  <td class="text-end text-nowrap"><small>S/ {{ c.total }}</small></td>
+                  <td>
+                    {% if c.estado_comprobante == '1' %}
+                    <span class="badge text-bg-success">ACEPTADO</span>
+                    {% elif c.estado_comprobante == '2' %}
+                    <span class="badge text-bg-danger">RECHAZADO</span>
+                    {% else %}
+                    <span class="badge text-bg-warning text-dark">PENDIENTE</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="4" class="text-center text-muted py-3">Sin comprobantes registrados.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const labels = {{ chart_labels_json|safe }};
+    const montos = {{ chart_montos_json|safe }};
+    const el = document.querySelector('#ventas-chart');
+    if (!el || !labels.length || typeof ApexCharts === 'undefined') return;
+
+    new ApexCharts(el, {
+      series: [{ name: 'Ventas (S/)', data: montos }],
+      chart: { type: 'bar', height: 280, toolbar: { show: false } },
+      plotOptions: { bar: { borderRadius: 4, columnWidth: '55%' } },
+      dataLabels: { enabled: false },
+      colors: ['#0d6efd'],
+      xaxis: { categories: labels },
+      yaxis: {
+        labels: {
+          formatter: function (v) { return 'S/ ' + v.toFixed(0); }
+        }
+      },
+      tooltip: {
+        y: { formatter: function (v) { return 'S/ ' + v.toFixed(2); } }
+      }
+    }).render();
+  });
+</script>
+{% endblock %}
