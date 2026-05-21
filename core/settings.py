@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -37,9 +38,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
+    'rest_framework',
     # Tu aplicación modular de SUNAT
     'facturacion',
+    'api'
 ]
 
 MIDDLEWARE = [
@@ -50,6 +52,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    'core.middleware.AuthRedirectMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -77,12 +81,12 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'db_facturacion',
-        'USER': 'postgres',
-        'PASSWORD': 'sunat_secure_pass',
-        'HOST': 'localhost',
-        'PORT': '5433', # El puerto seguro que asignamos para no colisionar
+        'ENGINE': config('DB_ENGINE'),
+        'NAME': config('DB_NAME'),
+        'USER': config('DB_USER'),
+        'PASSWORD': config('DB_PASSWORD'),
+        'HOST': config('DB_HOST', default='localhost'),
+        'PORT': config('DB_PORT', default='5432'),
     }
 }
 
@@ -132,26 +136,23 @@ STATICFILES_DIRS = [
 # Tu porcentaje de IGV
 IGV_PORCENTAJE = 0.18
 
-# Certificado digital (Asegúrate de copiar su archivo .pfx en esta ruta dentro de tu proyecto)
-SUNAT_CERT_PATH = BASE_DIR / 'core/certs/DEMO_Sunat.pfx'
-
 # Rutas físicas donde tu backend guardará los XMLs creados
 MEDIA_ROOT = BASE_DIR / 'storage'
 XML_FIRMADOS_DIR = MEDIA_ROOT / 'xmls' / 'firmados'
+XML_FIRMADOS_DIR     = MEDIA_ROOT / 'pdfs'
+CDRS_DIR             = MEDIA_ROOT / 'cdrs'
 
 # Crear los directorios automáticamente si no existen al levantar tu servidor
 import os
 if not os.path.exists(XML_FIRMADOS_DIR):
     os.makedirs(XML_FIRMADOS_DIR, exist_ok=True)
 
+# Certificado digital 
+SUNAT_CERT_PATH      = BASE_DIR / config('SUNAT_CERT_PATH', default='certs/DEMO_Sunat.pfx')
+SUNAT_CERT_PASSWORD  = config('SUNAT_CERT_PASSWORD', default='')
+SUNAT_CERT_RUC       = config('SUNAT_CERT_RUC', default='')
 
-
-SUNAT_CERT_PATH     = 'ruta/a/tu/certificado.pfx'
-SUNAT_CERT_PASSWORD = 'tu_password'
-SUNAT_CERT_RUC      = '20123456789'
-SUNAT_USUARIO_SOL   = 'MODDATOS'
-SUNAT_CLAVE_SOL     = 'moddatos'
-SUNAT_URL_BETA      = 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService?wsdl'
-IGV_PORCENTAJE      = 0.18
-XML_FIRMADOS_DIR    = BASE_DIR / 'storage/xml'
-CDRS_DIR            = BASE_DIR / 'storage/cdr'
+# SUNAT 
+SUNAT_URL_BETA       = config('SUNAT_URL_BETA')
+SUNAT_USUARIO_SOL    = config('SUNAT_USUARIO_SOL', default='MODDATOS')
+SUNAT_CLAVE_SOL      = config('SUNAT_CLAVE_SOL', default='moddatos')
