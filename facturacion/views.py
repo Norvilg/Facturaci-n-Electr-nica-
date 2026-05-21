@@ -57,26 +57,67 @@ def _get_moneda_soles() -> Moneda:
 
 
 def _get_tipo_comprobante(codigo: str) -> TipoComprobante:
-    """
-    Retorna el objeto TipoComprobante por código SUNAT ('01' o '03').
-    Ajusta el filtro según los datos reales de tu tabla tipo_comprobante.
-    """
-    if codigo == '01':
-        return TipoComprobante.objects.filter(
-            descripcion__icontains='factura'
-        ).first()
-    return TipoComprobante.objects.filter(
-        descripcion__icontains='boleta'
-    ).first()
+    """Retorna TipoComprobante según código SUNAT (01, 03, 07, 08, 09)."""
+    palabras_por_codigo = {
+        '01': ('factura',),
+        '03': ('boleta',),
+        '07': ('crédito', 'credito'),
+        '08': ('débito', 'debito'),
+        '09': ('guía', 'guia', 'remisión', 'remision'),
+    }
+    palabras = palabras_por_codigo.get(codigo, ('boleta',))
+    filtro = Q()
+    for palabra in palabras:
+        filtro |= Q(descripcion__icontains=palabra)
+    return TipoComprobante.objects.filter(filtro).first()
 
 
 def _get_serie(tipo_codigo: str) -> Serie:
-    """
-    Retorna la serie activa según el tipo de comprobante.
-    'F001' para facturas, 'B001' para boletas.
-    """
-    serie_nombre = 'F001' if tipo_codigo == '01' else 'B001'
-    return Serie.objects.filter(serie=serie_nombre).first()
+    """Retorna la serie activa según el tipo de comprobante."""
+    series_preferidas = {
+        '01': 'F001',
+        '03': 'B001',
+        '07': 'FC01',
+        '08': 'FD01',
+        '09': 'T001',
+    }
+    serie_nombre = series_preferidas.get(tipo_codigo)
+    if serie_nombre:
+        serie = Serie.objects.filter(serie=serie_nombre).first()
+        if serie:
+            return serie
+    return Serie.objects.first()
+
+
+def _comprobante_a_dict(comp) -> dict:
+    """Serializa un comprobante aceptado para el frontend."""
+    tipo_desc = (comp.id_tipo_comprobante.descripcion or '') if comp.id_tipo_comprobante else ''
+    tipo_lower = tipo_desc.lower()
+    if 'boleta' in tipo_lower:
+        tipo_codigo = '03'
+    elif 'factura' in tipo_lower:
+        tipo_codigo = '01'
+    else:
+        tipo_codigo = '01'
+
+    return {
+        'encontrado': True,
+        'id': comp.id_comprobante,
+        'numeracion': f'{comp.serie}-{comp.correlativo:08d}',
+        'serie': comp.serie,
+        'correlativo': comp.correlativo,
+        'tipo_codigo': tipo_codigo,
+        'tipo_display': tipo_desc,
+        'estado': comp.estado_comprobante,
+        'cliente_id': comp.id_cliente_id,
+        'cliente': comp.id_cliente.razon_social,
+        'cliente_doc': comp.id_cliente.nrodoc,
+        'direccion': comp.id_cliente.direccion or '',
+        'fecha': comp.fecha_emision.isoformat(),
+        'op_grabadas': str(comp.op_grabadas),
+        'igv': str(comp.igv),
+        'total': str(comp.total),
+    }
 
 
 def _siguiente_correlativo(serie: Serie) -> int:
@@ -167,16 +208,26 @@ def _procesar_emision(request, tipo_codigo: str):
             igv_total   = Decimal(str(data['totales']['igv']))
             total       = Decimal(str(data['totales']['total']))
 
+            # Referencia a comprobante original (notas de crédito / débito)
+            ref = data.get('comprobante_ref') or {}
+            if not ref and data.get('comprobante_id'):
+                ref_comp = Comprobante.objects.filter(
+                    pk=data['comprobante_id'],
+                    estado_comprobante='1',
+                ).select_related('id_tipo_comprobante').first()
+                if ref_comp:
+                    ref = _comprobante_a_dict(ref_comp)
+
             # ── 4. Crear Comprobante en TU BD ─────────────────────────────────
             comprobante = Comprobante.objects.create(
                 id_emisor            = emisor,
                 id_tipo_comprobante  = tipo_cp,
                 id_serie             = serie,
-                serie                = serie.serie,               # 'F001' o 'B001'
+                serie                = serie.serie,
                 correlativo          = correlativo,
                 forma_pago           = data.get('forma_pago', 'Contado'),
                 fecha_emision        = date.today(),
-                fecha_vencimiento    = date.today(),              # ajusta si manejas crédito
+                fecha_vencimiento    = date.today(),
                 id_moneda            = moneda,
                 op_grabadas          = op_grabadas,
                 op_exoneradas        = Decimal('0.00'),
@@ -184,7 +235,11 @@ def _procesar_emision(request, tipo_codigo: str):
                 igv                  = igv_total,
                 total                = total,
                 id_cliente           = cliente,
-                estado_comprobante   = '0',                       # 0 = borrador
+                estado_comprobante   = '0',
+                tipo_comprobante_ref_id=ref.get('tipo_codigo') or data.get('tipo_comprobante_ref'),
+                serie_ref            =ref.get('serie') or data.get('serie_ref'),
+                correlativo_ref      =ref.get('correlativo') or data.get('correlativo_ref'),
+                codmotivo            =data.get('codmotivo') or data.get('tipo_sustento') or '',
             )
 
             # ── 5. Crear Detalles en TU BD ────────────────────────────────────
@@ -265,13 +320,57 @@ def _render_formulario(request, tipo_codigo: str):
     else:
         template_html = 'facturacion/comprobante_form.html'
 
+    comprobantes_aceptados = (
+        Comprobante.objects
+        .filter(estado_comprobante='1')
+        .exclude(id_tipo_comprobante__descripcion__icontains='crédito')
+        .exclude(id_tipo_comprobante__descripcion__icontains='credito')
+        .exclude(id_tipo_comprobante__descripcion__icontains='débito')
+        .exclude(id_tipo_comprobante__descripcion__icontains='debito')
+        .select_related('id_cliente', 'id_tipo_comprobante')
+        .order_by('-fecha_emision', '-correlativo')[:100]
+    )
+
     # 3. Retornamos usando la variable de la plantilla dinámica
     return render(request, template_html, {
         'titulo'              : titulo,
         'tipo_comprobante_id' : tipo_codigo,
         'clientes'            : clientes,
         'productos'           : productos,
+        'comprobantes_aceptados': comprobantes_aceptados,
     })
+
+
+def buscar_comprobante(request):
+    """API: busca factura/boleta aceptada por serie y correlativo (PostgreSQL)."""
+    if request.method != 'GET':
+        return JsonResponse({'encontrado': False, 'error': 'Método no permitido.'}, status=405)
+
+    serie = (request.GET.get('serie') or '').strip().upper()
+    numero = (request.GET.get('numero') or '').strip()
+
+    if not serie or not numero:
+        return JsonResponse({'encontrado': False, 'error': 'Serie y número son obligatorios.'})
+
+    try:
+        correlativo = int(numero)
+    except ValueError:
+        return JsonResponse({'encontrado': False, 'error': 'Número de comprobante inválido.'})
+
+    comp = (
+        Comprobante.objects
+        .filter(serie=serie, correlativo=correlativo, estado_comprobante='1')
+        .select_related('id_cliente', 'id_tipo_comprobante')
+        .first()
+    )
+
+    if not comp:
+        return JsonResponse({
+            'encontrado': False,
+            'error': 'Comprobante no encontrado o no está ACEPTADO por SUNAT.',
+        })
+
+    return JsonResponse(_comprobante_a_dict(comp))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # VISTAS PÚBLICAS

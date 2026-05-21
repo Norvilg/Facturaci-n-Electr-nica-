@@ -16,7 +16,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from facturacion.views import dashboard, lista_clientes_view, lista_productos_view, api_facturas, api_boletas, api_notas_credito, api_notas_debito, api_guias_remision  
+from facturacion.views import (
+    dashboard, lista_clientes_view, lista_productos_view,
+    api_facturas, api_boletas, api_notas_credito, api_notas_debito, api_guias_remision,
+    buscar_comprobante,
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -34,5 +38,6 @@ urlpatterns = [
     path('api/notas-debito/', api_notas_debito, name='api_notas_debito'),
     # LISTO: Esta es la nueva ruta que activa la Guía de Remisión
     path('api/guias-remision/', api_guias_remision, name='api_guias_remision'),
+    path('api/comprobantes/buscar/', buscar_comprobante, name='buscar_comprobante'),
 ]
 
