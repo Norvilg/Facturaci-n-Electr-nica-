@@ -217,7 +217,7 @@
                         </tr>
                       </thead>
                       <tbody>
-                        <template x-for="(det, i) in comprobante.detalles" :key="i">
+                        <template x-for="(det, i) in (comprobante.detalles || [])" :key="i">
                           <tr class="text-center">
                             <td class="text-muted font-monospace" x-text="i+1"></td>
                             <td class="text-start fw-bold text-dark" x-text="det.nombre"></td>
@@ -226,6 +226,9 @@
                             <td class="font-monospace fw-bold" x-text="'S/. ' + det.subtotal"></td>
                           </tr>
                         </template>
+                        <tr x-show="!(comprobante.detalles && comprobante.detalles.length)">
+                          <td colspan="5" class="text-center text-muted py-3">Sin líneas de detalle en BD</td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
@@ -266,6 +269,7 @@
 <script>
 function notaCredito() {
   return {
+    productoDefaultId: {{ producto_default_id|default:"null" }},
     busqueda:      { serie: '', numero: '' },
     comprobante:   null,
     buscando:      false,
@@ -273,6 +277,19 @@ function notaCredito() {
     tipoNota:      '',
     motivo:        '',
     montoAfectado: null,
+
+    calcularTotales(monto) {
+      const total = parseFloat(monto);
+      const op = Math.round((total / 1.18) * 100) / 100;
+      const igv = Math.round((total - op) * 100) / 100;
+      return { op_grabadas: op, igv, total };
+    },
+
+    productoParaLinea() {
+      if (!this.comprobante) return null;
+      const det = (this.comprobante.detalles || [])[0];
+      return det?.id_producto || this.productoDefaultId;
+    },
 
     limpiarComprobante() {
       this.comprobante   = null;
@@ -319,11 +336,28 @@ function notaCredito() {
         return alert('El monto no puede superar el total del comprobante original.');
       }
 
+      const productoId = this.productoParaLinea();
+      if (!productoId) {
+        return alert('No hay productos en catálogo. Registre al menos uno en Productos.');
+      }
+
+      const totales = this.calcularTotales(this.montoAfectado);
       const payload = {
+        cliente_id: this.comprobante.cliente_id,
         comprobante_id: this.comprobante.id,
-        tipo_nota:      this.tipoNota,
-        motivo:         this.motivo,
+        comprobante_ref: this.comprobante,
+        tipo_nota: this.tipoNota,
+        codmotivo: this.tipoNota,
+        motivo: this.motivo,
         monto_afectado: this.montoAfectado,
+        forma_pago: 'Contado',
+        totales: totales,
+        items: [{
+          id: productoId,
+          cantidad: 1,
+          v_unitario: totales.op_grabadas,
+        }],
+        cuotas: [],
       };
 
       const resp = await fetch('/api/notas-credito/', {
@@ -337,7 +371,12 @@ function notaCredito() {
       const data = await resp.json();
 
       if (data.success) {
-        alert('Nota de Crédito ' + data.numeracion + ' emitida exitosamente.\nSUNAT: ' + data.mensaje_sunat);
+        const msg = 'Nota de Crédito ' + data.numeracion + ' emitida.\nSUNAT: ' + (data.mensaje_sunat || '');
+        if (data.comprobante_id && confirm(msg + '\n\n¿Abrir vista de impresión?')) {
+          window.open('/comprobantes/' + data.comprobante_id + '/imprimir/?formato=ticket', '_blank');
+        } else {
+          alert(msg);
+        }
         window.location.reload();
       } else {
         alert('Error: ' + data.error);

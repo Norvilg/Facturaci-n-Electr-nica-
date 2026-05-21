@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ numeracion }} — {{ tipo_nombre }}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #e9ecef;
+      color: #000;
+    }
+    body.format-ticket { background: #bbb; }
+    body.format-a4 { background: #ced4da; }
+
+    .toolbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; flex-wrap: wrap; gap: 0.5rem;
+      align-items: center; justify-content: center;
+      padding: 0.75rem 1rem;
+      background: #212529; color: #fff;
+    }
+    .toolbar a, .toolbar button {
+      border: none; border-radius: 6px;
+      padding: 0.45rem 1rem; font-weight: 600; font-size: 0.875rem;
+      cursor: pointer; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 0.35rem;
+    }
+    .btn-ticket { background: #6610f2; color: #fff; }
+    .btn-a4 { background: #0d6efd; color: #fff; }
+    .btn-print { background: #198754; color: #fff; }
+    .btn-back { background: #6c757d; color: #fff; }
+    .toolbar .active-fmt { outline: 2px solid #fff; outline-offset: 2px; }
+
+    .preview-wrap {
+      display: flex; justify-content: center;
+      padding: 1.5rem 1rem 2rem;
+    }
+    .print-sheet {
+      background: #fff;
+      box-shadow: 0 4px 24px rgba(0,0,0,.15);
+    }
+
+    /* ══════════ TICKET 80 mm (diseño referencia) ══════════ */
+    body.format-ticket .print-sheet {
+      width: 80mm;
+      max-width: 80mm;
+      padding: 3mm 2.5mm 4mm;
+      font-size: 11px;
+      line-height: 1.25;
+    }
+    .ticket-doc .t-title {
+      text-align: center;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      margin: 0 0 2px;
+      text-transform: uppercase;
+    }
+    .ticket-doc .t-serie {
+      text-align: center;
+      font-weight: 700;
+      font-size: 12px;
+      margin: 0 0 8px;
+    }
+    .ticket-doc .t-info {
+      margin-bottom: 8px;
+      font-size: 11px;
+    }
+    .ticket-doc .t-info .lbl {
+      font-weight: 700;
+      display: inline;
+    }
+    .ticket-doc .t-info .val {
+      font-weight: 400;
+    }
+    .ticket-doc .t-line {
+      border: none;
+      border-top: 1px solid #000;
+      margin: 6px 0;
+    }
+    .ticket-doc table.t-items {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+      margin: 0;
+    }
+    .ticket-doc table.t-items thead th {
+      font-weight: 700;
+      text-align: center;
+      padding: 3px 1px;
+      border-top: 1px solid #000;
+      border-bottom: 1px solid #000;
+    }
+    .ticket-doc table.t-items thead th.col-prod { text-align: left; }
+    .ticket-doc table.t-items tbody td {
+      padding: 4px 1px;
+      vertical-align: top;
+    }
+    .ticket-doc table.t-items tbody tr:last-child td {
+      border-bottom: 1px solid #000;
+    }
+    .ticket-doc .col-cant { width: 11%; text-align: center; }
+    .ticket-doc .col-prod { width: 42%; text-align: left; word-break: break-word; }
+    .ticket-doc .col-vu { width: 22%; text-align: right; }
+    .ticket-doc .col-sub { width: 25%; text-align: right; }
+
+    .ticket-doc .t-totals {
+      margin-top: 6px;
+      font-size: 11px;
+      text-align: right;
+    }
+    .ticket-doc .t-totals .row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+      padding: 1px 0;
+    }
+    .ticket-doc .t-totals .lbl { min-width: 118px; text-align: right; }
+    .ticket-doc .t-totals .val { min-width: 52px; text-align: right; }
+    .ticket-doc .t-totals .row-total {
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    .ticket-doc .t-letras {
+      text-align: center;
+      font-size: 10px;
+      font-weight: 700;
+      margin: 10px 0 8px;
+      text-transform: uppercase;
+      line-height: 1.35;
+    }
+    .ticket-doc .t-qr {
+      text-align: center;
+      margin: 6px 0;
+    }
+    .ticket-doc .t-qr img {
+      width: 38mm;
+      height: 38mm;
+      image-rendering: pixelated;
+    }
+    .ticket-doc .t-footer {
+      text-align: center;
+      font-size: 9px;
+      line-height: 1.35;
+      margin-top: 4px;
+    }
+    .ticket-doc .t-footer .rep {
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    /* ══════════ A4 ══════════ */
+    body.format-a4 .print-sheet {
+      width: 210mm; max-width: 210mm;
+      min-height: 260mm;
+      padding: 15mm 18mm;
+      font-size: 13px; line-height: 1.45;
+    }
+    .a4-doc .doc-title { font-size: 22px; font-weight: 800; text-transform: uppercase; }
+    .a4-doc .header-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 1rem; margin-bottom: 1.25rem;
+    }
+    .a4-doc table.items { width: 100%; border-collapse: collapse; margin: 0.5rem 0; }
+    .a4-doc table.items th, .a4-doc table.items td {
+      border-bottom: 1px solid #ddd; padding: 0.35rem 0.2rem;
+    }
+    .a4-doc table.items th { background: #f8f9fa; font-size: 0.8em; text-transform: uppercase; }
+    .a4-doc .totals .row-t { display: flex; justify-content: space-between; padding: 0.15rem 0; }
+    .a4-doc .totals .total-final {
+      font-weight: 800; font-size: 1.15em;
+      border-top: 2px solid #111; margin-top: 0.35rem; padding-top: 0.35rem;
+    }
+    .a4-doc .legal { margin-top: 1.5rem; font-size: 0.8em; text-align: center; color: #444; }
+    .text-center { text-align: center; }
+    .text-end { text-align: right; }
+    .fw-bold { font-weight: 700; }
+    .font-mono { font-family: Consolas, monospace; }
+    .muted { color: #555; }
+    .badge-estado {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 0.75em; font-weight: 700;
+    }
+    .badge-ok { background: #d1e7dd; color: #0f5132; }
+    .badge-rech { background: #f8d7da; color: #842029; }
+    .badge-pend { background: #fff3cd; color: #664d03; }
+
+    @media print {
+      body { background: #fff !important; }
+      .no-print { display: none !important; }
+      .preview-wrap { padding: 0; }
+      .print-sheet { box-shadow: none !important; margin: 0 auto; }
+      body.format-ticket .print-sheet { width: 80mm !important; max-width: 80mm !important; }
+    }
+    @page ticket-size { size: 80mm auto; margin: 2mm; }
+    @page a4-size { size: A4 portrait; margin: 12mm; }
+    @media print {
+      body.format-ticket { page: ticket-size; }
+      body.format-a4 { page: a4-size; }
+    }
+  </style>
+</head>
+<body class="format-{{ formato }}">
+  <div class="toolbar no-print">
+    <span class="small"><i class="bi bi-printer"></i> {{ numeracion }}</span>
+    <a href="?formato=ticket" class="btn-ticket {% if formato == 'ticket' %}active-fmt{% endif %}">
+      <i class="bi bi-receipt"></i> Ticket 80 mm
+    </a>
+    <a href="?formato=a4" class="btn-a4 {% if formato == 'a4' %}active-fmt{% endif %}">
+      <i class="bi bi-file-earmark-text"></i> Hoja A4
+    </a>
+    <button type="button" class="btn-print" onclick="window.print()">
+      <i class="bi bi-printer-fill"></i> Imprimir
+    </button>
+    <a href="{% url 'lista_comprobantes' %}" class="btn-back">
+      <i class="bi bi-arrow-left"></i> Volver
+    </a>
+  </div>
+
+  <div class="preview-wrap">
+    <div class="print-sheet">
+
+      {% if formato == 'ticket' %}
+      {# —— Diseño ticket (referencia factura.isi.pe) —— #}
+      <div class="ticket-doc">
+        <p class="t-title">{{ titulo_ticket }}</p>
+        <p class="t-serie">{{ numeracion_corta }}</p>
+
+        <div class="t-info">
+          <div><span class="lbl">FECHA:</span> <span class="val">{{ comprobante.fecha_emision|date:"d/m/Y" }}</span></div>
+          <div><span class="lbl">RUC:</span> <span class="val">{{ cliente.nrodoc }}</span></div>
+          <div><span class="lbl">CLIENTE:</span> <span class="val">{{ cliente.razon_social }}</span></div>
+          <div><span class="lbl">DIRECCION:</span> <span class="val">{% if cliente.direccion %}{{ cliente.direccion }}{% else %}- - -{% endif %}</span></div>
+          <div><span class="lbl">FORMA DE PAGO:</span> <span class="val">{{ comprobante.forma_pago }}</span></div>
+        </div>
+
+        <table class="t-items">
+          <thead>
+            <tr>
+              <th class="col-cant">CANT</th>
+              <th class="col-prod">PRODUCTO</th>
+              <th class="col-vu">V.U.</th>
+              <th class="col-sub">SUB</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in detalles %}
+            <tr>
+              <td class="col-cant">{{ d.cantidad|floatformat:"-2" }}</td>
+              <td class="col-prod">{{ d.id_producto.nombre }}</td>
+              <td class="col-vu">{{ d.valor_unitario|floatformat:"-2" }}</td>
+              <td class="col-sub">{{ d.valor_total|floatformat:"-2" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="4" class="text-center" style="padding:8px;">Sin detalle</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <div class="t-totals">
+          <div class="row"><span class="lbl">OP. GRAVADAS:</span><span class="val">{{ comprobante.op_grabadas|floatformat:2 }}</span></div>
+          <div class="row"><span class="lbl">IGV (18%):</span><span class="val">{{ comprobante.igv|floatformat:2 }}</span></div>
+          <div class="row"><span class="lbl">OP. EXONERADAS:</span><span class="val">{{ comprobante.op_exoneradas|floatformat:2 }}</span></div>
+          <div class="row"><span class="lbl">OP. INAFECTAS:</span><span class="val">{{ comprobante.op_inefactas|floatformat:2 }}</span></div>
+          <div class="row"><span class="lbl">ICBPER:</span><span class="val">{{ icbper|floatformat:2 }}</span></div>
+          <div class="row row-total"><span class="lbl">IMPORTE TOTAL:</span><span class="val">{{ comprobante.total|floatformat:2 }}</span></div>
+        </div>
+
+        <p class="t-letras">TOTAL EN LETRAS: {{ total_letras }}</p>
+
+        <div class="t-qr">
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&amp;margin=8&amp;data={{ qr_texto|urlencode }}"
+               alt="QR comprobante" width="180" height="180">
+        </div>
+
+        <div class="t-footer">
+          <div class="rep">Representación impresa de la<br>{{ titulo_ticket }}</div>
+          <div>Este comprobante electrónico podrá ser consultado en el sistema de facturación.</div>
+          {% if comprobante.estado_comprobante == '1' %}
+          <div class="mt-1" style="font-size:8px;">Estado: ACEPTADO — SUNAT</div>
+          {% endif %}
+        </div>
+      </div>
+
+      {% else %}
+      {# —— Formato A4 (sin cambios mayores) —— #}
+      <div class="a4-doc">
+        <div class="text-center mb-3">
+          <div class="fw-bold">{{ emisor.razon_social }}</div>
+          {% if emisor.nombre_comercial %}<div class="muted small">{{ emisor.nombre_comercial }}</div>{% endif %}
+          <div class="small">RUC {{ emisor.ruc }}</div>
+          {% if emisor.direccion %}<div class="small muted">{{ emisor.direccion }}</div>{% endif %}
+          <hr style="border-top:1px dashed #999; margin:0.75rem 0;">
+          <div class="doc-title">{{ tipo_nombre }}</div>
+          <div class="font-mono fw-bold">{{ numeracion }}</div>
+          <div class="small muted">{{ comprobante.fecha_emision|date:"d/m/Y" }}</div>
+          <span class="badge-estado {% if comprobante.estado_comprobante == '1' %}badge-ok{% elif comprobante.estado_comprobante == '2' %}badge-rech{% else %}badge-pend{% endif %}">
+            {{ estado_label }}
+          </span>
+        </div>
+
+        <div class="header-grid">
+          <div>
+            <div class="fw-bold small text-uppercase muted">Cliente</div>
+            <div class="fw-bold">{{ cliente.razon_social }}</div>
+            <div class="small">{{ cliente.nrodoc }}</div>
+            <div class="small muted">{{ cliente.direccion|default:"—" }}</div>
+          </div>
+          <div class="text-end">
+            <div class="fw-bold small text-uppercase muted">Condiciones</div>
+            <div>Forma de pago: <strong>{{ comprobante.forma_pago }}</strong></div>
+            {% if ref_numeracion %}<div class="small mt-1">Ref.: <span class="font-mono">{{ ref_numeracion }}</span></div>{% endif %}
+          </div>
+        </div>
+
+        <table class="items">
+          <thead>
+            <tr>
+              <th class="text-start">Descripción</th>
+              <th class="text-end">Cant.</th>
+              <th class="text-end">V.U.</th>
+              <th class="text-end">Importe</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in detalles %}
+            <tr>
+              <td>{{ d.id_producto.nombre }}</td>
+              <td class="text-end">{{ d.cantidad }}</td>
+              <td class="text-end font-mono">{{ d.valor_unitario }}</td>
+              <td class="text-end font-mono fw-bold">{{ d.importe_total }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center muted">Sin detalle</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <div class="totals">
+          <div class="row-t"><span>Op. gravadas</span><span class="font-mono">S/ {{ comprobante.op_grabadas }}</span></div>
+          <div class="row-t"><span>IGV (18%)</span><span class="font-mono">S/ {{ comprobante.igv }}</span></div>
+          <div class="row-t"><span>Op. exoneradas</span><span class="font-mono">S/ {{ comprobante.op_exoneradas }}</span></div>
+          <div class="row-t"><span>Op. inafectas</span><span class="font-mono">S/ {{ comprobante.op_inefactas }}</span></div>
+          <div class="row-t"><span>ICBPER</span><span class="font-mono">S/ {{ icbper|floatformat:2 }}</span></div>
+          <div class="row-t total-final"><span>IMPORTE TOTAL</span><span class="font-mono">S/ {{ comprobante.total }}</span></div>
+        </div>
+
+        <p class="text-center fw-bold small mt-3 text-uppercase">Total en letras: {{ total_letras }}</p>
+        <div class="text-center my-3">
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&amp;margin=6&amp;data={{ qr_texto|urlencode }}" alt="QR" width="140" height="140">
+        </div>
+        <div class="legal">
+          Representación impresa de la {{ titulo_ticket }} — UBL 2.1 / SUNAT<br>
+          {{ consulta_url }}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  {% if auto_print %}
+  <script>window.addEventListener('load', function () { window.print(); });</script>
+  {% endif %}
+</body>
+</html>

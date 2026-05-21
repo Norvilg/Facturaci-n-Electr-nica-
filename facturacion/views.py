@@ -12,14 +12,12 @@ from datetime import date
 from decimal import Decimal
 
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from django.db import transaction
 from django.db.models import Sum, Count, Q
 from django.db.models.functions import TruncMonth
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
-from datetime import timedelta
-
 from .models import (
     Cliente, Producto, Comprobante, Detalle,
     Serie, Emisor, Moneda, TipoComprobante, Cuota
@@ -89,6 +87,25 @@ def _get_serie(tipo_codigo: str) -> Serie:
     return Serie.objects.first()
 
 
+def _detalles_comprobante_dict(comp) -> list:
+    """Líneas del comprobante referenciado para el formulario de notas."""
+    return [
+        {
+            'id_producto': det.id_producto_id,
+            'nombre': det.id_producto.nombre,
+            'cantidad': str(det.cantidad),
+            'valor_unitario': str(det.valor_unitario),
+            'subtotal': str(det.valor_total),
+        }
+        for det in (
+            Detalle.objects
+            .filter(id_comprobante=comp)
+            .select_related('id_producto')
+            .order_by('item')
+        )
+    ]
+
+
 def _comprobante_a_dict(comp) -> dict:
     """Serializa un comprobante aceptado para el frontend."""
     tipo_desc = (comp.id_tipo_comprobante.descripcion or '') if comp.id_tipo_comprobante else ''
@@ -117,7 +134,78 @@ def _comprobante_a_dict(comp) -> dict:
         'op_grabadas': str(comp.op_grabadas),
         'igv': str(comp.igv),
         'total': str(comp.total),
+        'detalles': _detalles_comprobante_dict(comp),
     }
+
+
+def _enriquecer_payload_nota(data: dict) -> dict:
+    """
+    Completa cliente_id, totales e items cuando el formulario de NC/ND
+    envía solo comprobante_id, tipo y monto_afectado.
+    """
+    data = dict(data)
+    ref_comp = None
+
+    if data.get('comprobante_id'):
+        ref_comp = (
+            Comprobante.objects
+            .filter(pk=data['comprobante_id'], estado_comprobante='1')
+            .select_related('id_cliente', 'id_tipo_comprobante')
+            .first()
+        )
+        if not ref_comp:
+            raise ValueError('Comprobante referenciado no encontrado o no está ACEPTADO.')
+
+    if not data.get('cliente_id'):
+        if ref_comp:
+            data['cliente_id'] = ref_comp.id_cliente_id
+        else:
+            raise ValueError('Falta cliente_id o comprobante_id.')
+
+    if 'totales' not in data or not data['totales']:
+        monto = Decimal(str(data.get('monto_afectado', 0)))
+        if monto <= 0:
+            raise ValueError('Ingrese un monto afectado válido.')
+        op_grabadas = (monto / Decimal('1.18')).quantize(Decimal('0.01'))
+        igv_total = (monto - op_grabadas).quantize(Decimal('0.01'))
+        data['totales'] = {
+            'op_grabadas': str(op_grabadas),
+            'igv': str(igv_total),
+            'total': str(monto),
+        }
+
+    if not data.get('items'):
+        op_linea = Decimal(str(data['totales']['op_grabadas']))
+        producto_id = None
+        if ref_comp:
+            primer_det = (
+                Detalle.objects
+                .filter(id_comprobante=ref_comp)
+                .order_by('item')
+                .values_list('id_producto_id', flat=True)
+                .first()
+            )
+            producto_id = primer_det
+        if not producto_id:
+            producto_id = Producto.objects.order_by('id_producto').values_list(
+                'id_producto', flat=True
+            ).first()
+        if not producto_id:
+            raise ValueError('No hay productos en catálogo para generar el detalle de la nota.')
+        data['items'] = [{
+            'id': producto_id,
+            'cantidad': 1,
+            'v_unitario': str(op_linea),
+        }]
+
+    if not data.get('codmotivo'):
+        data['codmotivo'] = data.get('tipo_nota') or data.get('tipo_sustento') or ''
+
+    if not data.get('comprobante_ref') and ref_comp:
+        data['comprobante_ref'] = _comprobante_a_dict(ref_comp)
+
+    data.setdefault('forma_pago', 'Contado')
+    return data
 
 
 def _siguiente_correlativo(serie: Serie) -> int:
@@ -185,6 +273,12 @@ def _procesar_emision(request, tipo_codigo: str):
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
 
+    if tipo_codigo in ('07', '08'):
+        try:
+            data = _enriquecer_payload_nota(data)
+        except ValueError as exc:
+            return JsonResponse({'success': False, 'error': str(exc)}, status=400)
+
     try:
         with transaction.atomic():
 
@@ -239,7 +333,7 @@ def _procesar_emision(request, tipo_codigo: str):
                 tipo_comprobante_ref_id=ref.get('tipo_codigo') or data.get('tipo_comprobante_ref'),
                 serie_ref            =ref.get('serie') or data.get('serie_ref'),
                 correlativo_ref      =ref.get('correlativo') or data.get('correlativo_ref'),
-                codmotivo            =data.get('codmotivo') or data.get('tipo_sustento') or '',
+                codmotivo            =data.get('codmotivo') or data.get('tipo_sustento'),
             )
 
             # ── 5. Crear Detalles en TU BD ────────────────────────────────────
@@ -279,9 +373,10 @@ def _procesar_emision(request, tipo_codigo: str):
 
         if resultado.get('estado') == 'ACEPTADO':
             return JsonResponse({
-                'success'       : True,
-                'numeracion'    : numeracion,
-                'mensaje_sunat' : resultado.get('descripcion', 'Aceptado por SUNAT'),
+                'success'        : True,
+                'numeracion'     : numeracion,
+                'comprobante_id' : comprobante.id_comprobante,
+                'mensaje_sunat'  : resultado.get('descripcion', 'Aceptado por SUNAT'),
             })
         else:
             return JsonResponse({
@@ -331,6 +426,8 @@ def _render_formulario(request, tipo_codigo: str):
         .order_by('-fecha_emision', '-correlativo')[:100]
     )
 
+    producto_default = productos.first()
+
     # 3. Retornamos usando la variable de la plantilla dinámica
     return render(request, template_html, {
         'titulo'              : titulo,
@@ -338,6 +435,7 @@ def _render_formulario(request, tipo_codigo: str):
         'clientes'            : clientes,
         'productos'           : productos,
         'comprobantes_aceptados': comprobantes_aceptados,
+        'producto_default_id': producto_default.id_producto if producto_default else None,
     })
 
 
@@ -402,6 +500,64 @@ def api_guias_remision(request):
     return _procesar_emision(request, tipo_codigo='09')
 
 
+def _primer_dia_mes(d: date) -> date:
+    return d.replace(day=1)
+
+
+def _meses_atras(primer_dia: date, cantidad: int) -> date:
+    """Primer día del mes `cantidad-1` meses antes de `primer_dia` (6 meses → 5 atrás)."""
+    year, month = primer_dia.year, primer_dia.month - (cantidad - 1)
+    while month <= 0:
+        month += 12
+        year -= 1
+    return date(year, month, 1)
+
+
+def _siguiente_mes(primer_dia: date) -> date:
+    if primer_dia.month == 12:
+        return date(primer_dia.year + 1, 1, 1)
+    return date(primer_dia.year, primer_dia.month + 1, 1)
+
+
+def _ventas_aceptadas_chart(hoy: date, meses: int = 6):
+    """
+    Ventas aceptadas (estado 1) agrupadas por mes.
+    Rellena meses sin ventas con 0 para que el gráfico se vea desde el primer aceptado.
+    """
+    fin_mes = _primer_dia_mes(hoy)
+    inicio_rango = _meses_atras(fin_mes, meses)
+
+    ventas_por_mes = (
+        Comprobante.objects
+        .filter(fecha_emision__gte=inicio_rango, estado_comprobante='1')
+        .annotate(mes=TruncMonth('fecha_emision'))
+        .values('mes')
+        .annotate(monto=Sum('total'))
+        .order_by('mes')
+    )
+
+    montos_por_mes = {}
+    for fila in ventas_por_mes:
+        mes_val = fila.get('mes')
+        if not mes_val:
+            continue
+        clave = mes_val.date() if hasattr(mes_val, 'date') else mes_val
+        if isinstance(clave, date):
+            clave = _primer_dia_mes(clave)
+        montos_por_mes[clave] = float(fila['monto'] or 0)
+
+    labels = []
+    montos = []
+    cursor = inicio_rango
+    while cursor <= fin_mes:
+        labels.append(cursor.strftime('%b %Y'))
+        montos.append(montos_por_mes.get(cursor, 0.0))
+        cursor = _siguiente_mes(cursor)
+
+    tiene_datos = any(m > 0 for m in montos)
+    return labels, montos, tiene_datos
+
+
 def _contar_comprobantes_por_tipo(*palabras_clave: str) -> int:
     """Cuenta comprobantes cuyo tipo contiene alguna de las palabras clave."""
     if not palabras_clave:
@@ -426,6 +582,14 @@ def dashboard(request):
         Q(estado_comprobante='0') | Q(estado_comprobante__isnull=True)
     ).count()
 
+    comprobantes_mes = Comprobante.objects.filter(fecha_emision__gte=inicio_mes)
+    facturas_mes = comprobantes_mes.filter(
+        id_tipo_comprobante__descripcion__icontains='factura'
+    ).count()
+    boletas_mes = comprobantes_mes.filter(
+        id_tipo_comprobante__descripcion__icontains='boleta'
+    ).count()
+
     ventas_mes = Comprobante.objects.filter(
         fecha_emision__gte=inicio_mes,
         estado_comprobante='1',
@@ -447,22 +611,7 @@ def dashboard(request):
         .order_by('-fecha_emision', '-correlativo')[:8]
     )
 
-    hace_seis_meses = hoy - timedelta(days=180)
-    ventas_por_mes = (
-        Comprobante.objects
-        .filter(fecha_emision__gte=hace_seis_meses, estado_comprobante='1')
-        .annotate(mes=TruncMonth('fecha_emision'))
-        .values('mes')
-        .annotate(monto=Sum('total'), cantidad=Count('id_comprobante'))
-        .order_by('mes')
-    )
-
-    chart_labels = []
-    chart_montos = []
-    for fila in ventas_por_mes:
-        if fila['mes']:
-            chart_labels.append(fila['mes'].strftime('%b %Y'))
-            chart_montos.append(float(fila['monto'] or 0))
+    chart_labels, chart_montos, chart_has_data = _ventas_aceptadas_chart(hoy)
 
     modulos_docente = [
         {
@@ -506,16 +655,27 @@ def dashboard(request):
         'total_clientes': total_clientes,
         'total_productos': total_productos,
         'total_comprobantes': total_comprobantes,
+        'facturas_mes': facturas_mes,
+        'boletas_mes': boletas_mes,
         'aceptados': aceptados,
         'rechazados': rechazados,
         'pendientes': pendientes,
+        'alertas_sunat': rechazados + pendientes,
         'ventas_mes': ventas_mes,
         'emisor': emisor,
         'modulos_docente': modulos_docente,
         'ultimos_comprobantes': ultimos_comprobantes,
+        'chart_labels': chart_labels,
+        'chart_has_data': chart_has_data,
         'chart_labels_json': json.dumps(chart_labels, ensure_ascii=False),
         'chart_montos_json': json.dumps(chart_montos),
     })
+
+
+def perfil_emisor_view(request):
+    """Perfil / datos del emisor (botón Perfil del menú superior)."""
+    emisor = Emisor.objects.first()
+    return render(request, 'facturacion/perfil_emisor.html', {'emisor': emisor})
 
 
 def lista_clientes_view(request):
@@ -526,3 +686,182 @@ def lista_clientes_view(request):
 def lista_productos_view(request):
     productos = Producto.objects.select_related('id_tipo_afectacion', 'id_unidad').all()
     return render(request, 'productos_list.html', {'lista_productos': list(productos)})
+
+
+def _estado_comprobante_label(estado) -> str:
+    return {
+        '1': 'ACEPTADO',
+        '2': 'RECHAZADO',
+        '0': 'PENDIENTE',
+    }.get(estado or '0', 'PENDIENTE')
+
+
+def _titulo_ticket(comp) -> str:
+    """Título centrado estilo ticket SUNAT."""
+    desc = (comp.id_tipo_comprobante.descripcion or '').lower()
+    if 'boleta' in desc:
+        return 'BOLETA DE VENTA ELECTRONICA'
+    if 'crédito' in desc or 'credito' in desc:
+        return 'NOTA DE CREDITO ELECTRONICA'
+    if 'débito' in desc or 'debito' in desc:
+        return 'NOTA DE DEBITO ELECTRONICA'
+    if 'guía' in desc or 'guia' in desc:
+        return 'GUIA DE REMISION ELECTRONICA'
+    return 'FACTURA ELECTRONICA'
+
+
+def _tipo_codigo_sunat(comp) -> str:
+    desc = (comp.id_tipo_comprobante.descripcion or '').lower()
+    if 'boleta' in desc:
+        return '03'
+    if 'crédito' in desc or 'credito' in desc:
+        return '07'
+    if 'débito' in desc or 'debito' in desc:
+        return '08'
+    if 'guía' in desc or 'guia' in desc:
+        return '09'
+    return '01'
+
+
+def _numero_a_letras_entero(n: int) -> str:
+    """Convierte entero 0-999999 a letras (español)."""
+    if n == 0:
+        return 'CERO'
+    unidades = (
+        '', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE',
+    )
+    especiales = (
+        'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISEIS', 'DIECISIETE',
+        'DIECIOCHO', 'DIECINUEVE',
+    )
+    decenas = (
+        '', '', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA',
+        'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA',
+    )
+    centenas = (
+        '', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS',
+        'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS',
+    )
+
+    def bajo(num):
+        if num < 10:
+            return unidades[num]
+        if num < 20:
+            return especiales[num - 10]
+        if num < 100:
+            d, u = divmod(num, 10)
+            if u == 0:
+                return decenas[d]
+            if d == 2:
+                return 'VEINTI' + unidades[u]
+            return decenas[d] + ' Y ' + unidades[u]
+        if num == 100:
+            return 'CIEN'
+        c, r = divmod(num, 100)
+        return (centenas[c] + (' ' + bajo(r) if r else '')).strip()
+
+    partes = []
+    millones, resto = divmod(n, 1_000_000)
+    miles, resto = divmod(resto, 1000)
+    if millones:
+        partes.append(bajo(millones) + ' MILLON' + ('ES' if millones > 1 else ''))
+    if miles:
+        partes.append(('UN MIL' if miles == 1 else bajo(miles) + ' MIL').strip())
+    if resto or not partes:
+        partes.append(bajo(resto))
+    return ' '.join(partes)
+
+
+def _total_en_letras_soles(total) -> str:
+    monto = Decimal(str(total)).quantize(Decimal('0.01'))
+    entero = int(monto)
+    centavos = int((monto - Decimal(entero)) * 100)
+    return f'SON {_numero_a_letras_entero(entero)} CON {centavos:02d}/100 SOLES'
+
+
+def _texto_qr_sunat(comp, emisor, cliente) -> str:
+    """Cadena para QR (formato simplificado RUC|tipo|serie|número|IGV|total|fecha|...)."""
+    fecha = comp.fecha_emision.strftime('%Y-%m-%d') if comp.fecha_emision else ''
+    tipo_doc_cli = '6' if len((cliente.nrodoc or '')) == 11 else '1'
+    return '|'.join([
+        emisor.ruc or '',
+        _tipo_codigo_sunat(comp),
+        comp.serie or '',
+        str(comp.correlativo or ''),
+        str(comp.igv or '0'),
+        str(comp.total or '0'),
+        fecha,
+        tipo_doc_cli,
+        cliente.nrodoc or '',
+    ])
+
+
+def lista_comprobantes_view(request):
+    """Listado de comprobantes con enlaces a impresión ticket / A4."""
+    comprobantes = (
+        Comprobante.objects
+        .select_related('id_cliente', 'id_tipo_comprobante', 'id_emisor')
+        .order_by('-fecha_emision', '-correlativo')[:200]
+    )
+    return render(request, 'facturacion/comprobantes_list.html', {
+        'comprobantes': comprobantes,
+    })
+
+
+def imprimir_comprobante(request, pk: int):
+    """Representación impresa: ticket 80 mm o hoja A4 (?formato=ticket|a4)."""
+    comp = get_object_or_404(
+        Comprobante.objects.select_related(
+            'id_emisor',
+            'id_cliente',
+            'id_cliente__id_tipo_doc',
+            'id_tipo_comprobante',
+            'id_moneda',
+        ),
+        pk=pk,
+    )
+    detalles = (
+        Detalle.objects
+        .filter(id_comprobante=comp)
+        .select_related('id_producto')
+        .order_by('item')
+    )
+    formato = (request.GET.get('formato') or 'a4').lower()
+    if formato not in ('ticket', 'a4'):
+        formato = 'a4'
+
+    ref_numeracion = None
+    if comp.serie_ref and comp.correlativo_ref is not None:
+        ref_numeracion = f'{comp.serie_ref}-{comp.correlativo_ref:08d}'
+
+    emisor = comp.id_emisor
+    cliente = comp.id_cliente
+    titulo_ticket = _titulo_ticket(comp)
+    numeracion_corta = f'{comp.serie} - {comp.correlativo}'
+    qr_texto = _texto_qr_sunat(comp, emisor, cliente)
+    consulta_url = request.build_absolute_uri(f'/comprobantes/{pk}/imprimir/?formato=ticket')
+
+    return render(request, 'facturacion/comprobante_imprimir.html', {
+        'comprobante': comp,
+        'detalles': detalles,
+        'emisor': emisor,
+        'cliente': cliente,
+        'formato': formato,
+        'auto_print': request.GET.get('auto') == '1',
+        'numeracion': f'{comp.serie}-{comp.correlativo:08d}',
+        'numeracion_corta': numeracion_corta,
+        'estado_label': _estado_comprobante_label(comp.estado_comprobante),
+        'tipo_nombre': comp.id_tipo_comprobante.descripcion or 'Comprobante',
+        'titulo_ticket': titulo_ticket,
+        'total_letras': _total_en_letras_soles(comp.total),
+        'qr_texto': qr_texto,
+        'consulta_url': consulta_url,
+        'icbper': Decimal('0.00'),
+        'ref_numeracion': ref_numeracion,
+        'url_ticket': request.build_absolute_uri(
+            f'/comprobantes/{pk}/imprimir/?formato=ticket'
+        ),
+        'url_a4': request.build_absolute_uri(
+            f'/comprobantes/{pk}/imprimir/?formato=a4'
+        ),
+    })

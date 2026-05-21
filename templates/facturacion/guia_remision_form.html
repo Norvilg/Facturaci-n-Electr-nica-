@@ -76,7 +76,7 @@
                             <select class="form-select shadow-sm text-dark form-select-sm" name="cliente" required>
                                 <option value="">-- Seleccione un Cliente --</option>
                                 {% for c in clientes %}
-                                    <option value="{{ c.id }}">{{ c.nrodoc }} - {{ c.razon_social }}</option>
+                                    <option value="{{ c.id_cliente }}">{{ c.nrodoc }} - {{ c.razon_social }}</option>
                                 {% endfor %}
                             </select>
                         </div>
