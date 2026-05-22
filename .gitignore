@@ -1,1 +1,27 @@
+# Entorno virtual y secretos
+venv/
+env/
+.env
 env_factr/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Django / IDE
+*.log
+db.sqlite3
+.idea/
+.vscode/
+
+certs/
+*.pfx
+
+storage
+# XML/ CDR generados en pruebas locales (opcional: quitar si quieren versionar ejemplos)
+# storage/xmls/firmados/*.xml
+# storage/xmls/cdrs/*.xml

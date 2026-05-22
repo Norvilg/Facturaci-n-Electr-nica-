@@ -1,48 +1,80 @@
 {% extends 'base.html' %}
-{% load static %}
 {% block content %}
-
 <div class="app-content-header">
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-sm-6"><h1 class="m-0">Catálogo de Clientes</h1></div>
-        </div>
+  <div class="container-fluid">
+    <div class="row align-items-center">
+      <div class="col-md-6">
+        <h1 class="m-0">Mantenimiento de Clientes</h1>
+        <p class="text-muted small mb-0">CRUD · búsqueda por RUC o DNI</p>
+      </div>
+      <div class="col-md-6 text-md-end mt-2 mt-md-0">
+        {% if puede_crud %}
+        <a href="{% url 'cliente_crear' %}" class="btn btn-primary btn-sm">
+          <i class="bi bi-plus-lg me-1"></i> Nuevo cliente
+        </a>
+        {% endif %}
+      </div>
     </div>
+  </div>
 </div>
 
 <div class="app-content">
-    <div class="container-fluid">
-        <div class="card card-outline card-primary">
-            <div class="card-header">
-                <h3 class="card-title">Clientes Registrados en PostgreSQL</h3>
-            </div>
-            <div class="card-body p-0">
-                <table class="table table-striped vertical-align-middle">
-                    <thead>
-                        <tr>
-                            <th>Tipo Doc.</th>
-                            <th>Nro. Documento</th>
-                            <th>Razón Social / Nombre</th>
-                            <th>Dirección</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for cliente in lista_clientes %}
-                        <tr>
-                            <td>{{ cliente.id_tipo_doc.descripcion }}</td>
-                            <td><strong>{{ cliente.nrodoc }}</strong></td>
-                            <td>{{ cliente.razon_social }}</td>
-                            <td>{{ cliente.direccion }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="4" class="text-center text-muted">No hay clientes registrados aún.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+  <div class="container-fluid">
+    <div class="card card-outline card-primary">
+      <div class="card-header">
+        <form method="get" class="row g-2 align-items-end">
+          <div class="col-md-8">
+            <label class="form-label small mb-0">Buscar por RUC, DNI o razón social</label>
+            <input type="text" name="q" class="form-control" value="{{ busqueda }}"
+                   placeholder="Ej: 20100070970 o 45678901" />
+          </div>
+          <div class="col-md-4">
+            <button type="submit" class="btn btn-outline-primary w-100">
+              <i class="bi bi-search me-1"></i> Buscar
+            </button>
+          </div>
+        </form>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-striped table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>RUC / DNI</th>
+              <th>Razón social</th>
+              <th>Dirección</th>
+              <th class="text-end">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cliente in lista_clientes %}
+            <tr>
+              <td>{{ cliente.id_tipo_doc.descripcion }}</td>
+              <td><strong>{{ cliente.nrodoc }}</strong></td>
+              <td>{{ cliente.razon_social }}</td>
+              <td>{{ cliente.direccion|truncatechars:40 }}</td>
+              <td class="text-end text-nowrap">
+                <a href="{% url 'cliente_detalle' cliente.pk %}" class="btn btn-sm btn-outline-info" title="Comprobantes">
+                  <i class="bi bi-receipt"></i>
+                </a>
+                {% if puede_crud %}
+                <a href="{% url 'cliente_editar' cliente.pk %}" class="btn btn-sm btn-outline-secondary">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="5" class="text-center text-muted py-4">
+                {% if busqueda %}Sin resultados para "{{ busqueda }}".{% else %}No hay clientes registrados.{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
+  </div>
 </div>
 {% endblock %}

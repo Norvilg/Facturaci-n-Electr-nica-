@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row align-items-center">
+      <div class="col-md-7">
+        <h1 class="m-0">Libro de Ventas</h1>
+        <p class="text-muted small mb-0">
+          Período: {{ inicio|date:"d/m/Y" }} al {{ fin|date:"d/m/Y" }} · {{ cantidad }} comprobante(s)
+        </p>
+      </div>
+      <div class="col-md-5 text-md-end mt-2 mt-md-0">
+        <a href="{% url 'libro_ventas_exportar' %}?anio={{ anio }}&mes={{ mes }}"
+           class="btn btn-success btn-sm">
+          <i class="bi bi-file-earmark-spreadsheet me-1"></i> Exportar CSV
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="card card-outline card-success mb-3">
+      <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label small">Año</label>
+            <select name="anio" class="form-select">
+              {% for a in anios %}
+              <option value="{{ a }}" {% if a == anio %}selected{% endif %}>{{ a }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small">Mes</label>
+            <select name="mes" class="form-select">
+              {% for num, nombre in meses %}
+              <option value="{{ num }}" {% if num == mes %}selected{% endif %}>{{ nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100">Consultar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-md-4">
+        <div class="card border-start border-success border-4">
+          <div class="card-body">
+            <div class="text-muted small">Total base imponible</div>
+            <div class="fs-4 fw-bold">S/ {{ totales.base|floatformat:2 }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card border-start border-primary border-4">
+          <div class="card-body">
+            <div class="text-muted small">Total IGV</div>
+            <div class="fs-4 fw-bold text-primary">S/ {{ totales.igv|floatformat:2 }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card border-start border-dark border-4">
+          <div class="card-body">
+            <div class="text-muted small">Total ventas</div>
+            <div class="fs-4 fw-bold">S/ {{ totales.total|floatformat:2 }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-outline card-success">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-striped table-bordered mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Número</th>
+                <th>Estado</th>
+                <th>Doc. cliente</th>
+                <th>Cliente</th>
+                <th class="text-end">Base imponible</th>
+                <th class="text-end">IGV</th>
+                <th class="text-end">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for f in filas %}
+              <tr>
+                <td>{{ f.comp.fecha_emision|date:"d/m/Y" }}</td>
+                <td>{{ f.tipo }}</td>
+                <td class="font-monospace">{{ f.numero }}</td>
+                <td>{{ f.estado }}</td>
+                <td>{{ f.cliente_doc }}</td>
+                <td>{{ f.cliente_nombre|truncatechars:30 }}</td>
+                <td class="text-end">S/ {{ f.base }}</td>
+                <td class="text-end">S/ {{ f.igv }}</td>
+                <td class="text-end fw-bold">S/ {{ f.total }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="9" class="text-center text-muted py-4">Sin comprobantes en este período.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            {% if filas %}
+            <tfoot class="table-secondary fw-bold">
+              <tr>
+                <td colspan="6" class="text-end">TOTALES DEL MES</td>
+                <td class="text-end">S/ {{ totales.base|floatformat:2 }}</td>
+                <td class="text-end">S/ {{ totales.igv|floatformat:2 }}</td>
+                <td class="text-end">S/ {{ totales.total|floatformat:2 }}</td>
+              </tr>
+            </tfoot>
+            {% endif %}
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

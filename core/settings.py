@@ -10,6 +10,8 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
+import sys
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -27,6 +29,21 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+# Autenticación
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/login/'
+
+from django.contrib.messages import constants as message_constants
+
+MESSAGE_TAGS = {
+    message_constants.DEBUG: 'secondary',
+    message_constants.INFO: 'info',
+    message_constants.SUCCESS: 'success',
+    message_constants.WARNING: 'warning',
+    message_constants.ERROR: 'danger',
+}
+
 
 # Application definition
 
@@ -40,6 +57,9 @@ INSTALLED_APPS = [
 
     # Tu aplicación modular de SUNAT
     'facturacion',
+    # Documentación API (Swagger) — rúbrica docente
+    'rest_framework',
+    'drf_spectacular',
 ]
 
 MIDDLEWARE = [
@@ -87,6 +107,13 @@ DATABASES = {
     }
 }
 
+# Tests unitarios sin depender de PostgreSQL local
+if 'test' in sys.argv:
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'test_db.sqlite3',
+    }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -130,29 +157,48 @@ STATICFILES_DIRS = [
 ]
 
 
-# Tu porcentaje de IGV
+# ── Facturación electrónica / SUNAT ───────────────────────────────────────────
 IGV_PORCENTAJE = 0.18
 
-# Certificado digital (Asegúrate de copiar su archivo .pfx en esta ruta dentro de tu proyecto)
-SUNAT_CERT_PATH = BASE_DIR / 'core/certs/DEMO_Sunat.pfx'
+# beta = envío real SOAP a SUNAT | simulado = solo si SUNAT_MODO=simulado (tests)
+SUNAT_MODO = os.environ.get('SUNAT_MODO', 'beta')
 
-# Rutas físicas donde tu backend guardará los XMLs creados
+# Certificado digital (.pfx en core/certs/ o certs/)
+_pfx_default = BASE_DIR / 'core' / 'certs' / 'DEMO_Sunat.pfx'
+if not _pfx_default.is_file():
+    for _carpeta in (BASE_DIR / 'core' / 'certs', BASE_DIR / 'certs'):
+        if _carpeta.is_dir():
+            _archivos = list(_carpeta.glob('*.pfx'))
+            if _archivos:
+                _pfx_default = _archivos[0]
+                break
+SUNAT_CERT_PATH = os.environ.get('SUNAT_CERT_PATH') or str(_pfx_default.resolve())
+SUNAT_CERT_PASSWORD = os.environ.get('SUNAT_CERT_PASSWORD', 'Jhonain321')
+# RUC del certificado DEMO_Sunat.pfx (debe coincidir con el emisor en el XML)
+SUNAT_CERT_RUC = os.environ.get('SUNAT_CERT_RUC', '20100066603')
+SUNAT_USUARIO_SOL = os.environ.get('SUNAT_USUARIO_SOL', 'MODDATOS')
+SUNAT_CLAVE_SOL = os.environ.get('SUNAT_CLAVE_SOL', 'MODDATOS')
+SUNAT_URL_BETA = 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService'
+
 MEDIA_ROOT = BASE_DIR / 'storage'
 XML_FIRMADOS_DIR = MEDIA_ROOT / 'xmls' / 'firmados'
+CDRS_DIR = MEDIA_ROOT / 'xmls' / 'cdrs'
 
-# Crear los directorios automáticamente si no existen al levantar tu servidor
-import os
-if not os.path.exists(XML_FIRMADOS_DIR):
-    os.makedirs(XML_FIRMADOS_DIR, exist_ok=True)
+for _sunat_dir in (XML_FIRMADOS_DIR, CDRS_DIR):
+    os.makedirs(_sunat_dir, exist_ok=True)
 
+# ── OpenAPI / Swagger (drf-spectacular) ───────────────────────────────────────
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
 
-
-SUNAT_CERT_PATH     = 'ruta/a/tu/certificado.pfx'
-SUNAT_CERT_PASSWORD = 'tu_password'
-SUNAT_CERT_RUC      = '20123456789'
-SUNAT_USUARIO_SOL   = 'MODDATOS'
-SUNAT_CLAVE_SOL     = 'moddatos'
-SUNAT_URL_BETA      = 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService?wsdl'
-IGV_PORCENTAJE      = 0.18
-XML_FIRMADOS_DIR    = BASE_DIR / 'storage/xml'
-CDRS_DIR            = BASE_DIR / 'storage/cdr'
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'API Facturación Electrónica SUNAT',
+    'DESCRIPTION': (
+        'Endpoints del sistema de facturación electrónica (UBL 2.1). '
+        'Incluye emisión de comprobantes, búsqueda y consulta.'
+    ),
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'CONTACT': {'name': 'Equipo Facturación Electrónica'},
+}

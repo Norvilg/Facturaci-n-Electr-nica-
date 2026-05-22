@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid"><h1 class="m-0">{{ titulo }}</h1></div>
+</div>
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="card card-outline card-primary" style="max-width: 720px;">
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label">{{ form.nombre.label }}</label>
+            {{ form.nombre }}
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">{{ form.valor_unitario.label }}</label>
+              {{ form.valor_unitario }}
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">{{ form.codigo_sunat.label }}</label>
+              {{ form.codigo_sunat }}
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">{{ form.id_unidad.label }}</label>
+              {{ form.id_unidad }}
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label d-block">{{ form.afecto_igv.label }}</label>
+              <div class="form-check mt-2">
+                {{ form.afecto_igv }}
+                <span class="form-check-label small text-muted ms-1">
+                  Marque si el ítem está gravado con IGV (SUNAT cat. 10)
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Guardar</button>
+            <a href="{% url 'lista_productos' %}" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
