@@ -25,7 +25,22 @@ from .models import (
     Serie, Emisor, Moneda, TipoComprobante, Cuota
 )
 
+from .auth_utils import permiso_requerido, usuario_tiene_permiso
+from .roles import (
+    PERM_BUSCAR,
+    PERM_CONSULTAR,
+    PERM_DASHBOARD,
+    PERM_EMIT_BOLETA,
+    PERM_EMIT_FACTURA,
+    PERM_EMIT_GUIA,
+    PERM_EMIT_NC,
+    PERM_EMIT_ND,
+    PERM_VER_PERFIL,
+    PERMISO_POR_TIPO_SUNAT,
+)
 from .services_sunat import procesar_comprobante_completo
+from .calculos_tributarios import calcular_linea_detalle, calcular_totales_desde_total_con_igv
+from .numeracion import siguiente_correlativo as _siguiente_correlativo_serie
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -206,15 +221,14 @@ def _enriquecer_payload_nota(data: dict) -> dict:
             raise ValueError('Falta cliente_id o comprobante_id.')
 
     if 'totales' not in data or not data['totales']:
-        monto = Decimal(str(data.get('monto_afectado', 0)))
-        if monto <= 0:
-            raise ValueError('Ingrese un monto afectado válido.')
-        op_grabadas = (monto / Decimal('1.18')).quantize(Decimal('0.01'))
-        igv_total = (monto - op_grabadas).quantize(Decimal('0.01'))
+        try:
+            totales_nc = calcular_totales_desde_total_con_igv(data.get('monto_afectado', 0))
+        except ValueError as exc:
+            raise ValueError('Ingrese un monto afectado válido.') from exc
         data['totales'] = {
-            'op_grabadas': str(op_grabadas),
-            'igv': str(igv_total),
-            'total': str(monto),
+            'op_grabadas': str(totales_nc['op_grabadas']),
+            'igv': str(totales_nc['igv']),
+            'total': str(totales_nc['total']),
         }
 
     if not data.get('items'):
@@ -252,46 +266,13 @@ def _enriquecer_payload_nota(data: dict) -> dict:
 
 
 def _siguiente_correlativo(serie: Serie) -> int:
-    """
-    Obtiene e incrementa el correlativo de la serie.
-    Usa select_for_update para evitar condiciones de carrera.
-    """
-    serie_locked = Serie.objects.select_for_update().get(pk=serie.pk)
-    nuevo = serie_locked.correlativo + 1
-    serie_locked.correlativo = nuevo
-    serie_locked.save(update_fields=['correlativo'])
-    return nuevo
+    """Delega en facturacion.numeracion (tests de numeración)."""
+    return _siguiente_correlativo_serie(serie)
 
 
 def _calcular_detalle(item: dict, producto: Producto) -> dict:
-    """
-    Calcula los campos derivados de una línea de detalle.
-    
-    Tu modelo Detalle tiene:
-      valor_unitario  → precio SIN IGV (lo que envía Alpine)
-      precio_unitario → precio CON IGV
-      valor_total     → subtotal sin IGV (valor_unitario * cantidad)
-      importe_total   → total con IGV
-      igv             → IGV de la línea
-      porcentaje_igv  → 0.18
-    """
-    IGV_RATE      = Decimal('0.18')
-    cantidad      = Decimal(str(item['cantidad']))
-    v_unitario    = Decimal(str(item['v_unitario']))   # sin IGV (viene de Alpine)
-
-    valor_total   = (cantidad * v_unitario).quantize(Decimal('0.01'))
-    igv_linea     = (valor_total * IGV_RATE).quantize(Decimal('0.01'))
-    precio_unit   = (v_unitario * (1 + IGV_RATE)).quantize(Decimal('0.01'))
-    importe_total = (valor_total + igv_linea).quantize(Decimal('0.01'))
-
-    return {
-        'valor_unitario' : v_unitario,
-        'precio_unitario': precio_unit,
-        'valor_total'    : valor_total,
-        'igv'            : igv_linea,
-        'porcentaje_igv' : IGV_RATE,
-        'importe_total'  : importe_total,
-    }
+    """Delega en facturacion.calculos_tributarios (tests de IGV)."""
+    return calcular_linea_detalle(item['cantidad'], item['v_unitario'])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -306,6 +287,22 @@ def _procesar_emision(request, tipo_codigo: str):
     ----------
     tipo_codigo : '01' para factura, '03' para boleta
     """
+    perm_codigo = PERMISO_POR_TIPO_SUNAT.get(tipo_codigo)
+    if perm_codigo and not usuario_tiene_permiso(request.user, perm_codigo):
+        if request.method == 'POST':
+            return JsonResponse(
+                {'success': False, 'error': 'No tiene permiso para emitir este comprobante.'},
+                status=403,
+            )
+        from django.shortcuts import render
+        from .auth_utils import nombre_rol_usuario
+        return render(
+            request,
+            '403.html',
+            {'permiso_requerido': perm_codigo, 'rol_usuario': nombre_rol_usuario(request.user)},
+            status=403,
+        )
+
     if request.method != 'POST':
         # GET: renderiza el formulario
         return _render_formulario(request, tipo_codigo)
@@ -315,6 +312,15 @@ def _procesar_emision(request, tipo_codigo: str):
         data = json.loads(request.body)
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    if tipo_codigo in ('01', '03'):
+        tipo_enviado = str(data.get('tipo_comprobante') or '')
+        if tipo_enviado and tipo_enviado != tipo_codigo:
+            esperado = 'FACTURA' if tipo_codigo == '01' else 'BOLETA'
+            return JsonResponse({
+                'success': False,
+                'error': f'El tipo de comprobante no coincide. Use la pantalla de {esperado}.',
+            }, status=400)
 
     if tipo_codigo in ('07', '08'):
         try:
@@ -471,10 +477,22 @@ def _render_formulario(request, tipo_codigo: str):
 
     producto_default = productos.first()
 
+    serie_emision = 'F001' if tipo_codigo == '01' else 'B001'
+    correlativo_siguiente = 1
+    tipo_comprobante_label = 'FACTURA' if tipo_codigo == '01' else 'BOLETA'
+    if tipo_codigo in ('01', '03'):
+        serie_obj = _get_serie(tipo_codigo)
+        if serie_obj:
+            serie_emision = serie_obj.serie
+            correlativo_siguiente = serie_obj.correlativo + 1
+
     # 3. Retornamos usando la variable de la plantilla dinámica
     return render(request, template_html, {
         'titulo'              : titulo,
         'tipo_comprobante_id' : tipo_codigo,
+        'tipo_comprobante_label': tipo_comprobante_label,
+        'serie_emision': serie_emision,
+        'correlativo_siguiente': correlativo_siguiente,
         'clientes'            : clientes,
         'productos'           : productos,
         'comprobantes_aceptados': comprobantes_aceptados,
@@ -482,6 +500,7 @@ def _render_formulario(request, tipo_codigo: str):
     })
 
 
+@permiso_requerido(PERM_BUSCAR)
 def buscar_comprobante(request):
     """API: busca factura/boleta aceptada por serie y correlativo (PostgreSQL)."""
     if request.method != 'GET':
@@ -517,31 +536,52 @@ def buscar_comprobante(request):
 # VISTAS PÚBLICAS
 # ─────────────────────────────────────────────────────────────────────────────
 
+<<<<<<< HEAD
 @solo_roles('admin', 'emisor')
+=======
+@permiso_requerido(PERM_EMIT_FACTURA)
+>>>>>>> edin
 def api_facturas(request):
     """Endpoint para emitir Facturas Electrónicas (código SUNAT 01)."""
     return _procesar_emision(request, tipo_codigo='01')
 
 
+<<<<<<< HEAD
 @solo_roles('admin', 'emisor')
+=======
+@permiso_requerido(PERM_EMIT_BOLETA)
+>>>>>>> edin
 def api_boletas(request):
     """Endpoint para emitir Boletas de Venta (código SUNAT 03)."""
     return _procesar_emision(request, tipo_codigo='03')
 
 
+<<<<<<< HEAD
 @solo_roles('admin', 'emisor')
+=======
+# ASÍ LO LLAMAS: Agrega esta función exactamente debajo de api_boletas
+@permiso_requerido(PERM_EMIT_NC)
+>>>>>>> edin
 def api_notas_credito(request):
     """Endpoint para emitir Notas de Crédito (código SUNAT 07)."""
     return _procesar_emision(request, tipo_codigo='07')
 
 
+<<<<<<< HEAD
 @solo_roles('admin', 'emisor')
+=======
+@permiso_requerido(PERM_EMIT_ND)
+>>>>>>> edin
 def api_notas_debito(request):
     """Endpoint para emitir Notas de Débito (código SUNAT 08)."""
     return _procesar_emision(request, tipo_codigo='08')
 
 
+<<<<<<< HEAD
 @solo_roles('admin', 'emisor')
+=======
+@permiso_requerido(PERM_EMIT_GUIA)
+>>>>>>> edin
 def api_guias_remision(request):
     """Endpoint para emitir Guías de Remisión (código SUNAT 09)."""
     return _procesar_emision(request, tipo_codigo='09')
@@ -615,6 +655,7 @@ def _contar_comprobantes_por_tipo(*palabras_clave: str) -> int:
     return Comprobante.objects.filter(filtro).count()
 
 
+@permiso_requerido(PERM_DASHBOARD)
 def dashboard(request):
     """Panel principal con indicadores de la rúbrica del docente."""
     hoy = timezone.now().date()
@@ -660,13 +701,14 @@ def dashboard(request):
 
     chart_labels, chart_montos, chart_has_data = _ventas_aceptadas_chart(hoy)
 
-    modulos_docente = [
+    modulos_todos = [
         {
             'nombre': 'Factura electrónica',
             'codigo': '01',
             'url': 'api_facturas',
             'icono': 'bi-file-earmark-text',
             'cantidad': por_tipo['facturas'],
+            'permiso': PERM_EMIT_FACTURA,
         },
         {
             'nombre': 'Boleta de venta',
@@ -674,6 +716,7 @@ def dashboard(request):
             'url': 'api_boletas',
             'icono': 'bi-receipt',
             'cantidad': por_tipo['boletas'],
+            'permiso': PERM_EMIT_BOLETA,
         },
         {
             'nombre': 'Nota de crédito',
@@ -681,6 +724,7 @@ def dashboard(request):
             'url': 'api_notas_credito',
             'icono': 'bi-file-earmark-minus',
             'cantidad': por_tipo['notas_credito'],
+            'permiso': PERM_EMIT_NC,
         },
         {
             'nombre': 'Nota de débito',
@@ -688,6 +732,7 @@ def dashboard(request):
             'url': 'api_notas_debito',
             'icono': 'bi-file-earmark-plus',
             'cantidad': por_tipo['notas_debito'],
+            'permiso': PERM_EMIT_ND,
         },
         {
             'nombre': 'Guía de remisión',
@@ -695,7 +740,12 @@ def dashboard(request):
             'url': 'api_guias_remision',
             'icono': 'bi-truck',
             'cantidad': por_tipo['guias'],
+            'permiso': PERM_EMIT_GUIA,
         },
+    ]
+    modulos_docente = [
+        m for m in modulos_todos
+        if usuario_tiene_permiso(request.user, m['permiso'])
     ]
 
     return render(request, 'facturacion/dashboard.html', {
@@ -719,13 +769,18 @@ def dashboard(request):
     })
 
 
+<<<<<<< HEAD
 @solo_roles('admin')
+=======
+@permiso_requerido(PERM_VER_PERFIL)
+>>>>>>> edin
 def perfil_emisor_view(request):
     """Perfil / datos del emisor (botón Perfil del menú superior)."""
     emisor = Emisor.objects.first()
     return render(request, 'facturacion/perfil_emisor.html', {'emisor': emisor})
 
 
+<<<<<<< HEAD
 def lista_clientes_view(request):
     clientes = Cliente.objects.select_related('id_tipo_doc').all()
     return render(request, 'clientes_list.html', {'lista_clientes': list(clientes)})
@@ -735,6 +790,8 @@ def lista_productos_view(request):
     return render(request, 'productos_list.html', {'lista_productos': list(productos)})
 
 
+=======
+>>>>>>> edin
 def _estado_comprobante_label(estado) -> str:
     return {
         '1': 'ACEPTADO',
@@ -843,6 +900,7 @@ def _texto_qr_sunat(comp, emisor, cliente) -> str:
     ])
 
 
+@permiso_requerido(PERM_CONSULTAR)
 def lista_comprobantes_view(request):
     """Listado de comprobantes con enlaces a impresión ticket / A4."""
     comprobantes = (
@@ -855,6 +913,7 @@ def lista_comprobantes_view(request):
     })
 
 
+@permiso_requerido(PERM_CONSULTAR)
 def imprimir_comprobante(request, pk: int):
     """Representación impresa: ticket 80 mm o hoja A4 (?formato=ticket|a4)."""
     comp = get_object_or_404(

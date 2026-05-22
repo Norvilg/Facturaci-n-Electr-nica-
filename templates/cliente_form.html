@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <h1 class="m-0">{{ titulo }}</h1>
+  </div>
+</div>
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="card card-outline card-primary" style="max-width: 640px;">
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          {% for field in form %}
+          <div class="mb-3">
+            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+          </div>
+          {% endfor %}
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Guardar</button>
+            <a href="{% url 'lista_clientes' %}" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Acceso denegado</title>
+    <link rel="stylesheet" href="{% static 'css/adminlte.css' %}" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css"
+    />
+  </head>
+  <body class="bg-body-secondary d-flex align-items-center justify-content-center min-vh-100 p-3">
+    <div class="card shadow text-center" style="max-width: 480px;">
+      <div class="card-body p-4">
+        <i class="bi bi-shield-lock text-danger display-4"></i>
+        <h1 class="h4 mt-3">Acceso denegado</h1>
+        <p class="text-muted mb-2">
+          Su rol <strong>{{ rol_usuario }}</strong> no tiene permiso para esta sección.
+        </p>
+        {% if permiso_requerido %}
+        <p class="small text-muted">Permiso requerido: <code>{{ permiso_requerido }}</code></p>
+        {% endif %}
+        <div class="d-flex gap-2 justify-content-center mt-4">
+          <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">Volver</a>
+          <a href="{% url 'dashboard' %}" class="btn btn-primary btn-sm">Ir al inicio</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

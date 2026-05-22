@@ -44,6 +44,8 @@ class EmpresaProxy:
     ruc: str
     razon_social: str
     direccion: str
+    usuario_sol: str = ''
+    clave_sol: str = ''
 
 
 @dataclass
@@ -271,6 +273,8 @@ def _construir_proxy(tu_comprobante, tus_detalles) -> ComprobanteProxy:
         ruc          = emisor.ruc,
         razon_social = emisor.razon_social,
         direccion    = emisor.direccion or 'SIN DIRECCION',
+        usuario_sol  = emisor.usuario_sol,
+        clave_sol    = emisor.clave_sol,
     )
 
     # ── 2. Serie ──────────────────────────────────────────────────────────────
@@ -298,7 +302,12 @@ def _construir_proxy(tu_comprobante, tus_detalles) -> ComprobanteProxy:
         producto = det.id_producto
 
         # Tipo afectación: tu tabla tiene campo 'codigo' (ej: '10', '20', '30')
-        tipo_afectacion = producto.id_tipo_afectacion.codigo if producto.id_tipo_afectacion else '10'
+        from .catalogos_sunat import codigo_afectacion_igv
+
+        raw_afectacion = (
+            producto.id_tipo_afectacion.codigo if producto.id_tipo_afectacion else '10'
+        )
+        tipo_afectacion = codigo_afectacion_igv(raw_afectacion)
 
         # Unidad de medida: tu tabla Unidad tiene campo 'descripcion'
         # El compañero espera el código SUNAT (ej: 'NIU', 'ZZ')

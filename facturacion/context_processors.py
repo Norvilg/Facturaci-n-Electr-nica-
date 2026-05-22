@@ -2,6 +2,7 @@
 from django.db.models import Q, Sum
 from django.utils import timezone
 
+from .auth_utils import nombre_rol_usuario, permisos_usuario
 from .models import Cliente, Comprobante, Emisor, Producto
 
 
@@ -45,8 +46,13 @@ def layout_context(request):
         .order_by('-fecha_emision', '-correlativo')[:5]
     )
 
+    user = getattr(request, 'user', None)
+    perms = permisos_usuario(user) if user else {}
+
     return {
         'layout_emisor': emisor,
+        'rol_usuario': nombre_rol_usuario(user) if user and user.is_authenticated else '',
+        'permisos': perms,
         'nav_facturas_mes': facturas_mes,
         'nav_boletas_mes': boletas_mes,
         'nav_total_vendido_mes': total_vendido_mes,

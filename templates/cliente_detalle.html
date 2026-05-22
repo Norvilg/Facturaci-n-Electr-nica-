@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row align-items-center">
+      <div class="col-md-8">
+        <h1 class="m-0">{{ cliente.razon_social }}</h1>
+        <p class="text-muted mb-0">
+          {{ cliente.id_tipo_doc.descripcion }}: <strong>{{ cliente.nrodoc }}</strong>
+          · {{ cliente.direccion }}
+        </p>
+      </div>
+      <div class="col-md-4 text-md-end mt-2 mt-md-0">
+        {% if puede_crud %}
+        <a href="{% url 'cliente_editar' cliente.pk %}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-pencil me-1"></i> Editar
+        </a>
+        <form method="post" action="{% url 'cliente_eliminar' cliente.pk %}" class="d-inline"
+              onsubmit="return confirm('¿Eliminar este cliente?');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-trash me-1"></i> Eliminar
+          </button>
+        </form>
+        {% endif %}
+        <a href="{% url 'lista_clientes' %}" class="btn btn-link btn-sm">Volver</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row g-3 mb-3">
+      <div class="col-md-4">
+        <div class="card bg-light">
+          <div class="card-body text-center">
+            <div class="fs-4 fw-bold">{{ total_comprobantes }}</div>
+            <div class="small text-muted">Comprobantes emitidos</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card bg-light">
+          <div class="card-body text-center">
+            <div class="fs-5 fw-bold">S/ {{ suma_base|floatformat:2 }}</div>
+            <div class="small text-muted">Base imponible acumulada</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card bg-light">
+          <div class="card-body text-center">
+            <div class="fs-5 fw-bold text-primary">S/ {{ suma_total|floatformat:2 }}</div>
+            <div class="small text-muted">Total facturado (IGV S/ {{ suma_igv|floatformat:2 }})</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-outline card-primary">
+      <div class="card-header">
+        <h3 class="card-title mb-0">Comprobantes emitidos por este cliente</h3>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-striped mb-0">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Tipo</th>
+              <th>Número</th>
+              <th>Estado</th>
+              <th class="text-end">Base</th>
+              <th class="text-end">IGV</th>
+              <th class="text-end">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in comprobantes %}
+            <tr>
+              <td>{{ c.fecha_emision|date:"d/m/Y" }}</td>
+              <td>{{ c.id_tipo_comprobante.descripcion }}</td>
+              <td class="font-monospace">{{ c.serie }}-{{ c.correlativo|stringformat:"08d" }}</td>
+              <td>
+                {% if c.estado_comprobante == '1' %}
+                <span class="badge text-bg-success">Aceptado</span>
+                {% elif c.estado_comprobante == '2' %}
+                <span class="badge text-bg-danger">Rechazado</span>
+                {% else %}
+                <span class="badge text-bg-warning text-dark">Pendiente</span>
+                {% endif %}
+              </td>
+              <td class="text-end">S/ {{ c.op_grabadas }}</td>
+              <td class="text-end">S/ {{ c.igv }}</td>
+              <td class="text-end fw-bold">S/ {{ c.total }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" class="text-center text-muted py-3">Sin comprobantes para este cliente.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

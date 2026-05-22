@@ -1,5 +1,11 @@
+<<<<<<< HEAD
 {% load static %}<!doctype html>
 <html lang="es">
+=======
+{% load static permisos_tags %}<!doctype html>
+<html lang="en">
+  <!--begin::Head-->
+>>>>>>> edin
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>{% block title %}Facturación Electrónica SUNAT{% endblock %}</title>
@@ -31,12 +37,18 @@
                 <i class="bi bi-list"></i>
               </a>
             </li>
+            {% if permisos.acceso_dashboard %}
             <li class="nav-item d-none d-md-block">
               <a href="{% url 'dashboard' %}" class="nav-link {% if request.path == '/' %}active{% endif %}">
                 Inicio
               </a>
             </li>
+<<<<<<< HEAD
             {% if user_es_emisor %}
+=======
+            {% endif %}
+            {% if request.user|puede_emitir %}
+>>>>>>> edin
             <li class="nav-item d-none d-md-block">
               <a href="{% url 'api_facturas' %}" class="nav-link">Emitir</a>
             </li>
@@ -126,6 +138,7 @@
                      alt="Usuario"
                      style="width:32px;height:32px;object-fit:cover;" />
                 <span class="d-none d-md-inline ms-1">
+<<<<<<< HEAD
                   {% if request.user.is_authenticated %}
                     {{ request.user.get_full_name|default:request.user.username }}
                     <small class="text-muted ms-1">
@@ -140,17 +153,40 @@
                   {% else %}
                     Usuario sistema
                   {% endif %}
+=======
+                  {{ request.user.get_full_name|default:request.user.username }}
+>>>>>>> edin
                 </span>
               </a>
               <ul class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
                 <!-- Header usuario -->
                 <li class="user-header text-bg-primary text-center py-3">
+<<<<<<< HEAD
                   <img src="{% static 'assets/img/avatar.png' %}"
                        class="rounded-circle shadow mb-2"
                        alt="Avatar"
                        style="width:80px;height:80px;object-fit:cover;border:3px solid rgba(255,255,255,.9);" />
                   <p class="mb-0 text-white fw-bold">
                     {{ request.user.get_full_name|default:request.user.username }}
+=======
+                  <img
+                    src="{% static 'assets/img/login.png' %}"
+                    class="rounded-circle shadow mb-2"
+                    alt="Logo emisor"
+                    style="width:90px;height:90px;object-fit:cover;border:3px solid rgba(255,255,255,.9);"
+                  />
+                  <p class="mb-0 text-white">
+                    {{ request.user.get_full_name|default:request.user.username }}
+                    {% if layout_emisor %}
+                    <small class="d-block opacity-75">{{ layout_emisor.razon_social|truncatechars:40 }}</small>
+                    <small class="d-block opacity-75">RUC {{ layout_emisor.ruc }}</small>
+                    {% else %}
+                    <small class="d-block opacity-75">Sesión activa</small>
+                    {% endif %}
+                    {% if rol_usuario %}
+                    <small class="d-block opacity-75"><i class="bi bi-person-badge me-1"></i>{{ rol_usuario }}</small>
+                    {% endif %}
+>>>>>>> edin
                   </p>
                   <small class="text-white opacity-75">
                     {% if user_rol == 'admin' %}Administrador
@@ -164,37 +200,56 @@
                 <!-- Estadísticas rápidas -->
                 <li class="user-body border-top border-bottom py-2">
                   <div class="row text-center">
+                    {% if permisos.gestionar_clientes %}
                     <div class="col-4">
                       <a href="{% url 'lista_clientes' %}" class="d-block text-decoration-none py-1">
                         <strong class="d-block text-primary fs-5">{{ nav_total_clientes }}</strong>
                         <span class="small text-muted">Clientes</span>
                       </a>
                     </div>
-                    <div class="col-4 border-start border-end">
+                    {% endif %}
+                    {% if permisos.acceso_dashboard %}
+                    <div class="col-4 {% if permisos.gestionar_clientes %}border-start border-end{% endif %}">
                       <a href="{% url 'dashboard' %}" class="d-block text-decoration-none py-1">
                         <strong class="d-block text-primary fs-5">{{ nav_facturas_mes|add:nav_boletas_mes }}</strong>
                         <span class="small text-muted">Ventas mes</span>
                       </a>
                     </div>
+                    {% endif %}
+                    {% if permisos.gestionar_productos %}
                     <div class="col-4">
                       <a href="{% url 'lista_productos' %}" class="d-block text-decoration-none py-1">
                         <strong class="d-block text-primary fs-5">{{ nav_total_productos }}</strong>
                         <span class="small text-muted">Productos</span>
                       </a>
                     </div>
+                    {% endif %}
                   </div>
                 </li>
 
                 <!-- Botones pie -->
                 <li class="user-footer bg-light d-flex justify-content-between align-items-center px-3 py-2 gap-2">
+<<<<<<< HEAD
                   {% if user_es_admin %}
+=======
+                  {% if permisos.ver_perfil_emisor %}
+>>>>>>> edin
                   <a href="{% url 'perfil_emisor' %}" class="btn btn-outline-secondary btn-sm flex-grow-1">
                     <i class="bi bi-building me-1"></i>Perfil
                   </a>
                   {% endif %}
+<<<<<<< HEAD
                   <a href="{% url 'logout' %}" class="btn btn-outline-danger btn-sm flex-grow-1">
                     <i class="bi bi-box-arrow-right me-1"></i>Cerrar sesión
                   </a>
+=======
+                  <form method="post" action="{% url 'logout' %}" class="flex-grow-1 mb-0">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+                      Cerrar sesión
+                    </button>
+                  </form>
+>>>>>>> edin
                 </li>
               </ul>
             </li>
@@ -219,6 +274,7 @@
 
         <div class="sidebar-wrapper">
           <nav class="mt-2">
+<<<<<<< HEAD
             <ul class="nav sidebar-menu flex-column"
                 data-lte-toggle="treeview"
                 role="navigation"
@@ -226,6 +282,17 @@
                 id="navigation">
 
               <!-- ── Panel principal (todos los roles) ─────────────────── -->
+=======
+            <ul
+              class="nav sidebar-menu flex-column"
+              data-lte-toggle="treeview"
+              role="navigation"
+              aria-label="Main navigation"
+              data-accordion="false"
+              id="navigation"
+            >
+              {% if permisos.acceso_dashboard %}
+>>>>>>> edin
               <li class="nav-item">
                 <a href="{% url 'dashboard' %}"
                    class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
@@ -233,16 +300,25 @@
                   <p>Panel Principal</p>
                 </a>
               </li>
+              {% endif %}
 
+<<<<<<< HEAD
               <!-- ── Comprobantes (admin y emisor) ─────────────────────── -->
               {% if user_es_emisor %}
               <li class="nav-item {% if 'facturas' in request.path or 'boletas' in request.path or 'notas-credito' in request.path or 'notas-debito' in request.path or 'guias-remision' in request.path %}menu-open{% endif %}">
                 <a href="#"
                    class="nav-link {% if 'facturas' in request.path or 'boletas' in request.path or 'notas-credito' in request.path or 'notas-debito' in request.path or 'guias-remision' in request.path %}active{% endif %}">
+=======
+              {% if permisos.emit_factura or permisos.emit_boleta or permisos.emit_nota_credito or permisos.emit_nota_debito or permisos.emit_guia_remision or permisos.consultar_comprobantes %}
+              <!-- MÓDULO DE EMISIÓN DE COMPROBANTES -->
+              <li class="nav-item {% if 'facturas' in request.path or 'boletas' in request.path or 'notas-credito' in request.path or 'notas-debito' in request.path or 'guias-remision' in request.path or '/comprobantes/' in request.path and 'api' not in request.path %}menu-open{% endif %}">
+                <a href="#" class="nav-link {% if 'facturas' in request.path or 'boletas' in request.path or 'notas-credito' in request.path or 'notas-debito' in request.path or 'guias-remision' in request.path or '/comprobantes/' in request.path and 'api' not in request.path %}active{% endif %}">
+>>>>>>> edin
                   <i class="nav-icon bi bi-file-earmark-text-fill"></i>
                   <p>Emitir Comprobantes <i class="nav-arrow bi bi-chevron-right"></i></p>
                 </a>
                 <ul class="nav nav-treeview">
+                  {% if permisos.emit_factura %}
                   <li class="nav-item">
                     <a href="{% url 'api_facturas' %}"
                        class="nav-link {% if 'facturas' in request.path %}active{% endif %}">
@@ -250,6 +326,8 @@
                       <p>Factura Electrónica</p>
                     </a>
                   </li>
+                  {% endif %}
+                  {% if permisos.emit_boleta %}
                   <li class="nav-item">
                     <a href="{% url 'api_boletas' %}"
                        class="nav-link {% if 'boletas' in request.path %}active{% endif %}">
@@ -257,6 +335,8 @@
                       <p>Boleta de Venta</p>
                     </a>
                   </li>
+                  {% endif %}
+                  {% if permisos.emit_nota_credito %}
                   <li class="nav-item">
                     <a href="{% url 'api_notas_credito' %}"
                        class="nav-link {% if 'notas-credito' in request.path %}active{% endif %}">
@@ -264,6 +344,8 @@
                       <p>Nota de Crédito</p>
                     </a>
                   </li>
+                  {% endif %}
+                  {% if permisos.emit_nota_debito %}
                   <li class="nav-item">
                     <a href="{% url 'api_notas_debito' %}"
                        class="nav-link {% if 'notas-debito' in request.path %}active{% endif %}">
@@ -271,6 +353,8 @@
                       <p>Nota de Débito</p>
                     </a>
                   </li>
+                  {% endif %}
+                  {% if permisos.emit_guia_remision %}
                   <li class="nav-item">
                     <a href="{% url 'api_guias_remision' %}"
                        class="nav-link {% if 'guias-remision' in request.path %}active{% endif %}">
@@ -278,6 +362,7 @@
                       <p>Guía de Remisión</p>
                     </a>
                   </li>
+<<<<<<< HEAD
                 </ul>
               </li>
               {% endif %}
@@ -290,6 +375,10 @@
                   <p>Comprobantes <i class="nav-arrow bi bi-chevron-right"></i></p>
                 </a>
                 <ul class="nav nav-treeview">
+=======
+                  {% endif %}
+                  {% if permisos.consultar_comprobantes %}
+>>>>>>> edin
                   <li class="nav-item">
                     <a href="{% url 'lista_comprobantes' %}"
                        class="nav-link {% if '/comprobantes/' in request.path and 'api' not in request.path %}active{% endif %}">
@@ -297,11 +386,18 @@
                       <p>Consultar / Imprimir</p>
                     </a>
                   </li>
+                  {% endif %}
                 </ul>
               </li>
+              {% endif %}
 
+<<<<<<< HEAD
               <!-- ── Procesos SUNAT (admin y emisor) ───────────────────── -->
               {% if user_es_emisor %}
+=======
+              {% if permisos.procesos_sunat %}
+              <!-- MÓDULO DE PROCESOS SUNAT -->
+>>>>>>> edin
               <li class="nav-item">
                 <a href="#" class="nav-link">
                   <i class="nav-icon bi bi-cloud-arrow-up-fill"></i>
@@ -324,7 +420,12 @@
               </li>
               {% endif %}
 
+<<<<<<< HEAD
               <!-- ── Catálogos (todos los roles) ───────────────────────── -->
+=======
+              {% if permisos.gestionar_clientes or permisos.gestionar_productos %}
+              <!-- MÓDULO DE CATÁLOGOS-->
+>>>>>>> edin
               <li class="nav-item {% if 'clientes' in request.path or 'productos' in request.path %}menu-open{% endif %}">
                 <a href="#"
                    class="nav-link {% if 'clientes' in request.path or 'productos' in request.path %}active{% endif %}">
@@ -332,28 +433,57 @@
                   <p>Catálogos <i class="nav-arrow bi bi-chevron-right"></i></p>
                 </a>
                 <ul class="nav nav-treeview">
+                  {% if permisos.gestionar_clientes %}
                   <li class="nav-item">
+<<<<<<< HEAD
                     <a href="{% url 'lista_clientes' %}"
                        class="nav-link {% if 'clientes' in request.path %}active{% endif %}">
+=======
+                    <a href="{% url 'lista_clientes' %}" class="nav-link {% if 'clientes' in request.path %}active{% endif %}">
+>>>>>>> edin
                       <i class="nav-icon bi bi-people-fill"></i>
                       <p>Clientes</p>
                     </a>
                   </li>
+                  {% endif %}
+                  {% if permisos.gestionar_productos %}
                   <li class="nav-item">
+<<<<<<< HEAD
                     <a href="{% url 'lista_productos' %}"
                        class="nav-link {% if 'productos' in request.path %}active{% endif %}">
+=======
+                    <a href="{% url 'lista_productos' %}" class="nav-link {% if 'productos' in request.path %}active{% endif %}">
+>>>>>>> edin
                       <i class="nav-icon bi bi-tags-fill"></i>
                       <p>Productos / Servicios</p>
                     </a>
                   </li>
+                  {% endif %}
                 </ul>
               </li>
+              {% endif %}
 
+<<<<<<< HEAD
               <!-- ── Configuración (solo admin) ────────────────────────── -->
               {% if user_es_admin %}
               <li class="nav-item {% if 'perfil' in request.path or 'usuarios' in request.path %}menu-open{% endif %}">
                 <a href="#"
                    class="nav-link {% if 'perfil' in request.path or 'usuarios' in request.path %}active{% endif %}">
+=======
+              {% if permisos.libro_ventas %}
+              <li class="nav-item">
+                <a href="{% url 'libro_ventas' %}" class="nav-link {% if 'libro-ventas' in request.path %}active{% endif %}">
+                  <i class="nav-icon bi bi-journal-text"></i>
+                  <p>Libro de Ventas</p>
+                </a>
+              </li>
+              {% endif %}
+
+              {% if permisos.ver_perfil_emisor %}
+              <!-- CONFIGURACIÓN DEL SISTEMA -->
+              <li class="nav-item {% if 'perfil' in request.path %}menu-open{% endif %}">
+                <a href="#" class="nav-link {% if 'perfil' in request.path %}active{% endif %}">
+>>>>>>> edin
                   <i class="nav-icon bi bi-gear-fill"></i>
                   <p>Configuración <i class="nav-arrow bi bi-chevron-right"></i></p>
                 </a>
@@ -375,7 +505,10 @@
                 </ul>
               </li>
               {% endif %}
+<<<<<<< HEAD
 
+=======
+>>>>>>> edin
             </ul>
           </nav>
         </div>
@@ -386,6 +519,7 @@
            CONTENIDO PRINCIPAL
       ════════════════════════════════════════════════════════════════════ -->
       <main class="app-main">
+<<<<<<< HEAD
         {% if error_permiso %}
         <div class="container-fluid pt-3">
           <div class="alert alert-danger alert-dismissible fade show" role="alert">
@@ -393,6 +527,16 @@
             <strong>Acceso denegado:</strong> {{ error_permiso }}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
           </div>
+=======
+        {% if messages %}
+        <div class="container-fluid pt-3">
+          {% for message in messages %}
+          <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+          {% endfor %}
+>>>>>>> edin
         </div>
         {% endif %}
         {% block content %}{% endblock %}

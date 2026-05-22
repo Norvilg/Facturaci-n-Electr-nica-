@@ -2,7 +2,9 @@
 {% load static %}
 
 {% block content %}
-<div class="app-content py-3" x-data="facturador('{{ tipo_comprobante_id }}')" id="facturador-app">
+<div class="app-content py-3"
+     x-data="facturador('{{ tipo_comprobante_id }}', '{{ serie_emision }}', {{ correlativo_siguiente }})"
+     id="facturador-app">
     <div class="container-fluid">
         
         <div class="row mb-4 align-items-center bg-white p-3 rounded shadow-sm border-start border-4"
@@ -39,10 +41,12 @@
                             <div class="row g-2 mb-3">
                                 <div class="col-6">
                                     <label class="form-label fw-bold small text-dark">Tipo Comp.</label>
-                                    <select class="form-select form-select-sm text-dark fw-bold" x-model="tipoDocId" @change="cambiarTipoComprobante">
-                                        <option value="01">FACTURA</option>
-                                        <option value="03">BOLETA</option>
-                                    </select>
+                                    <input type="text"
+                                           class="form-control form-control-sm text-center fw-bold text-dark bg-light"
+                                           value="{{ tipo_comprobante_label }}"
+                                           readonly
+                                           title="Definido por el menú: Emitir Factura o Emitir Boleta">
+                                    <input type="hidden" name="tipo_comprobante_fijo" :value="tipoDocId">
                                 </div>
                                 <div class="col-6">
                                     <label class="form-label fw-bold small text-dark">Tipo Doc. Identidad</label>
@@ -287,15 +291,17 @@ $(document).ready(function() {
     });
 });
 
-function facturador(tipoCompId) {
+function facturador(tipoCompId, serieEmision, correlativoSiguiente) {
+    const esFactura = tipoCompId === '01';
     return {
         tipoDocId: tipoCompId,
-        isFactura: tipoCompId === '01',
-        tituloDoc: tipoCompId === '01' ? 'Emitir Factura Electrónica' : 'Emitir Boleta de Venta',
+        isFactura: esFactura,
+        tituloDoc: esFactura ? 'Emitir Factura Electrónica' : 'Emitir Boleta de Venta',
+        tipoCompLabel: esFactura ? 'FACTURA' : 'BOLETA',
         formaPago: 'Contado',
-        tipoDocumentoCliente: tipoCompId === '01' ? '6' : '1',
-        serieSeleccionada: tipoCompId === '01' ? 'F001' : 'B001',
-        correlativo: 48, 
+        tipoDocumentoCliente: esFactura ? '6' : '1',
+        serieSeleccionada: serieEmision || (esFactura ? 'F001' : 'B001'),
+        correlativo: correlativoSiguiente || 1,
         clienteSeleccionado: '',
         productoBuscado: '',
         clienteData: { info_resumen: '', direccion: '' },
@@ -327,14 +333,6 @@ function facturador(tipoCompId) {
                 this.clienteData.info_resumen = doc + (doc && nombre ? ' - ' : '') + nombre;
             });
         },
-        cambiarTipoComprobante() {
-            this.isFactura = this.tipoDocId === '01';
-            this.tituloDoc = this.isFactura ? 'Emitir Factura Electrónica' : 'Emitir Boleta de Venta';
-            this.serieSeleccionada = this.isFactura ? 'F001' : 'B001';
-            this.tipoDocumentoCliente = this.isFactura ? '6' : '1';
-            this.limpiarCliente();
-        },
-
         evaluarTipoDocumento() {
             if (this.tipoDocumentoCliente === '0') {
                 this.clienteSeleccionado = "ANONIMO";

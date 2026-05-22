@@ -119,6 +119,24 @@ class Comprobante(models.Model):
 
     class Meta:
         db_table = 'comprobante'
+        permissions = [
+            ('acceso_dashboard', 'Acceso al panel principal'),
+            ('emit_factura', 'Emitir facturas electrónicas'),
+            ('emit_boleta', 'Emitir boletas de venta'),
+            ('emit_nota_credito', 'Emitir notas de crédito'),
+            ('emit_nota_debito', 'Emitir notas de débito'),
+            ('emit_guia_remision', 'Emitir guías de remisión'),
+            ('consultar_comprobantes', 'Consultar e imprimir comprobantes'),
+            ('buscar_comprobante', 'Buscar comprobantes de referencia'),
+            ('gestionar_clientes', 'Ver y buscar clientes'),
+            ('crud_clientes', 'Crear, editar y eliminar clientes'),
+            ('gestionar_productos', 'Ver y buscar productos'),
+            ('crud_productos', 'Crear, editar y eliminar productos'),
+            ('libro_ventas', 'Reporte libro de ventas y exportar'),
+            ('ver_perfil_emisor', 'Ver datos del emisor'),
+            ('configurar_emisor', 'Configurar datos del emisor'),
+            ('procesos_sunat', 'Procesos SUNAT (resúmenes y bajas)'),
+        ]
 
 class Detalle(models.Model):
     id_detalle = models.AutoField(primary_key=True)

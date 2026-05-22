@@ -36,12 +36,16 @@
         </p>
       </div>
       <div class="col-lg-4 text-lg-end mt-2 mt-lg-0">
+        {% if permisos.emit_factura %}
         <a href="{% url 'api_facturas' %}" class="btn btn-primary btn-sm me-1">
           <i class="bi bi-plus-lg me-1"></i> Nueva factura
         </a>
+        {% endif %}
+        {% if permisos.emit_boleta %}
         <a href="{% url 'api_boletas' %}" class="btn btn-outline-primary btn-sm">
           <i class="bi bi-receipt me-1"></i> Boleta
         </a>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -52,6 +56,7 @@
 
     <!-- KPIs principales (como tu diseño de referencia) -->
     <div class="row g-3 mb-4">
+      {% if permisos.emit_factura %}
       <div class="col-sm-6 col-xl-3">
         <a href="{% url 'api_facturas' %}" class="text-decoration-none text-dark">
           <div class="kpi-card kpi-success p-3">
@@ -66,6 +71,8 @@
           </div>
         </a>
       </div>
+      {% endif %}
+      {% if permisos.emit_boleta %}
       <div class="col-sm-6 col-xl-3">
         <a href="{% url 'api_boletas' %}" class="text-decoration-none text-dark">
           <div class="kpi-card kpi-primary p-3">
@@ -80,6 +87,7 @@
           </div>
         </a>
       </div>
+      {% endif %}
       <div class="col-sm-6 col-xl-3">
         <div class="kpi-card kpi-warning p-3">
           <div class="d-flex justify-content-between align-items-start">
@@ -108,6 +116,7 @@
       </div>
     </div>
 
+    {% if modulos_docente %}
     <!-- Accesos rápidos -->
     <div class="row g-2 mb-4">
       <div class="col-12">
@@ -123,6 +132,7 @@
       </div>
       {% endfor %}
     </div>
+    {% endif %}
 
     <div class="row g-3">
       <div class="col-lg-8">
