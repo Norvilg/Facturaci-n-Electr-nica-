@@ -17,6 +17,8 @@ def codigo_afectacion_igv(codigo: str | None) -> str:
     c = str(codigo or '10').strip()
     if c in AFECTACION_IGV_VALIDAS:
         return c
+    # En líneas UBL el tributo IGV va en TaxScheme/cbc:ID=1000; TaxExemptionReasonCode es cat. 07.
+    # Algunos XML antiguos guardaron 1000 en el campo de afectación — SUNAT beta exige cat. 07 (p. ej. 10).
     if c == '1000':
         return '10'
     if c.isdigit() and len(c) == 4 and c.startswith('10'):

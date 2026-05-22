@@ -57,10 +57,11 @@ def _mensaje_fault_amigable(codigo: str, fault: str) -> str:
     """Traduce faults SOAP frecuentes (el texto de SUNAT suele ser engañoso)."""
     if codigo == '2074':
         return (
-            'SUNAT rechazó la estructura del XML al validarlo (código 2074). '
-            'No significa que UBL 2.1 esté mal: suele deberse a la firma digital '
-            'o a un campo fuera del esquema. Verifique emisor RUC 20100066603, '
-            'usuario SOL MODDATOS y el XML en storage/xmls/firmados/. '
+            'SUNAT rechazó el XML (código 2074). El mensaje "UBLVersionID" suele ser '
+            'genérico: UBL 2.1 + CustomizationID 2.0 son correctos. Revise firma '
+            '(Id=SignatureSP, C14N inclusivo), PartyTaxScheme del emisor '
+            '(TaxScheme/cbc:ID = RUC), TaxExemptionReasonCode cat. 07 (10), '
+            'InvoiceTypeCode sin listID=0101, y credenciales 20100066603MODDATOS. '
             f'Detalle SUNAT: {fault}'
         )
     if codigo == '2335':
@@ -72,6 +73,23 @@ def _mensaje_fault_amigable(codigo: str, fault: str) -> str:
         return (
             'SUNAT no pudo leer el XML (0306). Revise atributos no permitidos '
             f'(p. ej. Note con languageLocaleID). Detalle: {fault}'
+        )
+    if codigo in ('env:Client', 'Client') or 'internal error' in fault.lower():
+        return (
+            'SUNAT beta respondió error interno (servicio temporal o saturado). '
+            'El XML suele ser válido en local; reintente en unos minutos. '
+            f'Detalle: {fault}'
+        )
+    if codigo == '3205':
+        return (
+            'SUNAT: falta tipo de operación (cat. 51, ProfileID 0101). '
+            f'Detalle: {fault}'
+        )
+    if codigo == '2800':
+        return (
+            'SUNAT: tipo de documento del receptor no permitido para esta factura. '
+            'Use cliente con RUC (schemeID 6). '
+            f'Detalle: {fault}'
         )
     return f'SUNAT: {fault}'
 

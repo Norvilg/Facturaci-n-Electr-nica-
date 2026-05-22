@@ -160,7 +160,7 @@ STATICFILES_DIRS = [
 # ── Facturación electrónica / SUNAT ───────────────────────────────────────────
 IGV_PORCENTAJE = 0.18
 
-# beta = envío real SOAP a SUNAT | simulado = solo si SUNAT_MODO=simulado (tests)
+# beta = envío real SOAP a SUNAT | simulado = CDR local (solo pruebas sin red)
 SUNAT_MODO = os.environ.get('SUNAT_MODO', 'beta')
 
 # Certificado digital (.pfx en core/certs/ o certs/)
@@ -179,6 +179,22 @@ SUNAT_CERT_RUC = os.environ.get('SUNAT_CERT_RUC', '20100066603')
 SUNAT_USUARIO_SOL = os.environ.get('SUNAT_USUARIO_SOL', 'MODDATOS')
 SUNAT_CLAVE_SOL = os.environ.get('SUNAT_CLAVE_SOL', 'MODDATOS')
 SUNAT_URL_BETA = 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService'
+# Cliente zeep de sunat-py (recomendado en beta frente a SOAP manual)
+SUNAT_USE_ZEEP = os.environ.get('SUNAT_USE_ZEEP', 'true').lower() in ('1', 'true', 'yes')
+
+# Esquemas UBL del curso (OASIS 2.1 + extensiones SUNAT 2.0 en subcarpeta 2.0/)
+_xsd_curso = Path(
+    os.environ.get(
+        'SUNAT_XSD_DIR',
+        r'C:\Users\USER\Documents\CURSOS 2026-I\Archivos XSD\Archivos XSD',
+    )
+)
+SUNAT_XSD_DIR = str(_xsd_curso.resolve()) if _xsd_curso.is_dir() else ''
+SUNAT_XSD_INVOICE_21 = (
+    str((_xsd_curso / '2.1' / 'maindoc' / 'UBL-Invoice-2.1.xsd').resolve())
+    if (_xsd_curso / '2.1' / 'maindoc' / 'UBL-Invoice-2.1.xsd').is_file()
+    else ''
+)
 
 MEDIA_ROOT = BASE_DIR / 'storage'
 XML_FIRMADOS_DIR = MEDIA_ROOT / 'xmls' / 'firmados'

@@ -226,7 +226,15 @@ def procesar_comprobante_completo(tu_comprobante, tus_detalles) -> dict:
     """
     try:
         proxy = _construir_proxy(tu_comprobante, tus_detalles)
-        
+        aviso = _validar_receptor_factura(proxy.tipo, proxy.cliente.tipo_documento)
+        if aviso:
+            return {
+                'estado': 'RECHAZADO',
+                'codigo': '2800',
+                'descripcion': aviso,
+                'ticket': '',
+            }
+
         # Importamos el services.py del compañero
         # (debe estar copiado como services_companero.py en tu app)
         from . import generarXmlFirmar as svc
@@ -412,15 +420,36 @@ def _mapear_tipo_documento(tipo_doc_obj) -> str:
     # Mapeo por descripción (ajusta según tu BD)
     desc = tipo_doc_obj.descripcion.upper().strip()
     mapeo = {
-        'RUC'                : '6',
-        'DNI'                : '1',
+        'RUC': '6',
+        'DNI': '1',
         'CARNET DE EXTRANJERIA': '4',
-        'CE'                 : '4',
-        'PASAPORTE'          : '7',
-        'SIN DOCUMENTO'      : '0',
-        '-'                  : '0',
+        'CARNET DE EXTRANJERÍA': '4',
+        'CE': '4',
+        'PASAPORTE': '7',
+        'SIN DOCUMENTO': '0',
+        '-': '0',
+        '6': '6',
+        '1': '1',
     }
-    return mapeo.get(desc, '1')  # default DNI si no encuentra
+    if desc in mapeo:
+        return mapeo[desc]
+    # Por id en catálogo local habitual (1=RUC, 2=DNI)
+    tid = getattr(tipo_doc_obj, 'id_tipo_doc', None)
+    if tid == 1:
+        return '6'
+    if tid == 2:
+        return '1'
+    return '1'
+
+
+def _validar_receptor_factura(tipo_comprobante: str, tipo_doc_receptor: str) -> str | None:
+    """Factura (01) a persona jurídica exige receptor con RUC (cat. 06 = 6)."""
+    if tipo_comprobante == '01' and tipo_doc_receptor != '6':
+        return (
+            'La factura electrónica exige receptor con RUC (tipo documento 6). '
+            'Seleccione un cliente con RUC o emita boleta.'
+        )
+    return None
 
 
 def _mapear_tipo_comprobante(tu_comprobante) -> str:
