@@ -305,10 +305,10 @@ def dashboard(request):
 
 
 def lista_clientes_view(request):
-    clientes = Cliente.objects.select_related('id_tipo_doc').all()
+    clientes = Cliente.objects.all()
     return render(request, 'clientes_list.html', {'lista_clientes': list(clientes)})
 
 
 def lista_productos_view(request):
-    productos = Producto.objects.select_related('id_tipo_afectacion', 'id_unidad').all()
+    productos = Producto.objects.all()
     return render(request, 'productos_list.html', {'lista_productos': list(productos)})

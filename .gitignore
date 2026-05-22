@@ -1,1 +1,16 @@
+.env
+.venv/
+venv/
+env/
 env_factr/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+db.sqlite3
+*.log
+storage/xmls/
+debug_sunat/
+*.xml
+*.zip
+*.pfx
