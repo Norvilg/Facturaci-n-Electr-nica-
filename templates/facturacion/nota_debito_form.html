@@ -2,189 +2,443 @@
 {% load static %}
 
 {% block content %}
-<div class="app-content py-3" x-data="facturador('08')" id="facturador-app">
-    <div class="container-fluid">
-        
-        <div class="row mb-4 align-items-center bg-white p-3 rounded shadow-sm border-start border-4 border-indigo">
-            <div class="col-md-6">
-                <h3 class="mb-0 fw-bold text-dark"><i class="bi bi-file-earmark-plus-fill me-2 text-indigo"></i>Emitir Nota de Débito</h3>
-                <p class="text-muted mb-0 small">Aumento de valor electrónico penalizado bajo normativas UBL 2.1 - SUNAT</p>
+<div class="app-content py-3" x-data="notaDebito()" id="nota-debito-app">
+  <div class="container-fluid">
+
+    <div class="row mb-4 align-items-center bg-white p-3 rounded shadow-sm border-start border-4 border-indigo">
+      <div class="col-md-6">
+        <h3 class="mb-0 fw-bold text-dark"><i class="bi bi-file-earmark-plus-fill me-2 text-indigo"></i>Emitir Nota de Débito</h3>
+        <p class="text-muted mb-0 small">Datos cargados desde PostgreSQL — UBL 2.1 / SUNAT</p>
+      </div>
+      <div class="col-md-6 text-md-end">
+        <span class="fs-6 px-3 py-2 rounded-pill fw-bold text-white shadow-sm" style="background-color: #6610f2;">
+          <i class="bi bi-shield-check-fill me-1"></i> Código SUNAT: 08
+        </span>
+      </div>    
+    </div>
+
+    <form id="frmNotaDebito" @submit.prevent="guardarComprobante" novalidate>
+      {% csrf_token %}
+
+      <div class="row g-3">
+        <div class="col-xl-5 col-lg-6">
+
+          <!-- Documento referenciado (BD) -->
+          <div class="card mb-3 shadow-sm border-top border-indigo border-3">
+            <div class="card-header bg-white">
+              <h5 class="card-title mb-0 fs-6 text-dark fw-bold"><i class="bi bi-link-45deg me-2"></i>Documento Referenciado</h5>
             </div>
-            <div class="col-md-6 text-md-end">
-                <span class="fs-6 px-3 py-2 rounded-pill fw-bold text-white shadow-sm bg-indigo" style="background-color: #6610f2;">
-                    <i class="bi bi-shield-check-fill me-1"></i> Código SUNAT: 08
-                </span>
+            <div class="card-body bg-white">
+              <p class="text-muted small mb-2">Seleccione un comprobante <strong>ACEPTADO</strong> de la base de datos o búsquelo por serie y número.</p>
+
+              <label class="form-label fw-bold small text-dark">Comprobantes aceptados en BD</label>
+              <select class="form-select form-select-sm text-dark mb-3"
+                      x-model="comprobanteListaId"
+                      @change="cargarDesdeLista()">
+                <option value="">-- Seleccione de la lista --</option>
+                {% for comp in comprobantes_aceptados %}
+                <option value="{{ comp.id_comprobante }}"
+                        data-serie="{{ comp.serie }}"
+                        data-correlativo="{{ comp.correlativo }}"
+                        data-tipo="{{ comp.id_tipo_comprobante.descripcion|default:'' }}">
+                  {{ comp.serie }}-{{ comp.correlativo|stringformat:"08d" }} |
+                  {{ comp.id_cliente.razon_social|truncatechars:25 }} |
+                  S/. {{ comp.total }}
+                </option>
+                {% empty %}
+                <option value="" disabled>No hay comprobantes aceptados en BD</option>
+                {% endfor %}
+              </select>
+
+              <div class="row g-2 mb-2">
+                <div class="col-5">
+                  <label class="form-label fw-bold small text-dark">Serie</label>
+                  <input type="text" class="form-control form-control-sm text-center fw-bold text-dark"
+                         x-model="busqueda.serie" placeholder="F001" maxlength="4"
+                         @input="limpiarComprobante()" style="text-transform:uppercase;">
+                </div>
+                <div class="col-5">
+                  <label class="form-label fw-bold small text-dark">Número</label>
+                  <input type="number" class="form-control form-control-sm text-center fw-bold text-dark"
+                         x-model.number="busqueda.numero" placeholder="12" min="1"
+                         @input="limpiarComprobante()">
+                </div>
+                <div class="col-2 d-flex align-items-end">
+                  <button type="button" @click="buscarComprobante()"
+                          class="btn btn-sm fw-bold text-white w-100"
+                          style="background-color:#343a40; height:31px;">
+                    <i class="bi bi-search"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div x-show="buscando" class="text-center py-2 small text-muted">
+                <span class="spinner-border spinner-border-sm"></span> Consultando BD...
+              </div>
+              <div x-show="errorBusqueda" class="alert alert-danger py-2 small mb-2" x-text="errorBusqueda"></div>
+
+              <template x-if="comprobante">
+                <div class="p-2 rounded border border-success bg-light mb-3 small">
+                  <div class="d-flex justify-content-between">
+                    <span class="fw-bold font-monospace" x-text="comprobante.numeracion"></span>
+                    <span class="badge bg-success">ACEPTADO</span>
+                  </div>
+                  <div class="text-muted mt-1">
+                    <i class="bi bi-person me-1"></i><span x-text="comprobante.cliente"></span><br>
+                    <i class="bi bi-cash me-1"></i>Total ref.: S/. <span x-text="comprobante.total"></span>
+                  </div>
+                </div>
+              </template>
+
+              <label class="form-label fw-bold small text-dark">Sustento (catálogo SUNAT)</label>
+              <select class="form-select form-select-sm text-dark mb-2" x-model="tipoSustento">
+                <option value="01">01 — Interés por mora</option>
+                <option value="02">02 — Aumento en el valor de la operación</option>
+                <option value="03">03 — Penalidades / otros conceptos</option>
+              </select>
+              <textarea class="form-control form-control-sm text-dark small" rows="2"
+                        x-model="motivoSustento"
+                        placeholder="Describa el motivo del cobro adicional..."></textarea>
             </div>
+          </div>
+
+          <!-- Cliente (BD) -->
+          <div class="card mb-3 shadow-sm">
+            <div class="card-header bg-white">
+              <h5 class="card-title mb-0 fs-6 text-dark fw-bold"><i class="bi bi-person-bounding-box me-2"></i>Datos del Cliente</h5>
+            </div>
+            <div class="card-body bg-white">
+              <label class="form-label fw-bold small text-dark">Receptor (tabla cliente)</label>
+              <select class="form-select form-select-sm text-dark shadow-sm" id="selectCliente"
+                      x-model="clienteSeleccionado" @change="actualizarClienteManual()">
+                <option value="">-- Seleccione un cliente --</option>
+                {% for c in clientes %}
+                <option value="{{ c.id_cliente }}"
+                        data-dir="{{ c.direccion|default:'Sin dirección registrada.' }}"
+                        data-doc="{{ c.nrodoc }}"
+                        data-nombre="{{ c.razon_social }}">
+                  {{ c.nrodoc }} - {{ c.razon_social }}
+                </option>
+                {% empty %}
+                <option value="" disabled>No hay clientes en BD — regístrelos en Catálogos</option>
+                {% endfor %}
+              </select>
+              <p class="text-muted small mt-1 mb-2" x-show="comprobante">
+                <i class="bi bi-info-circle me-1"></i>Se autocompleta al elegir el documento referenciado.
+              </p>
+              <label class="form-label fw-bold small text-dark">Dirección fiscal</label>
+              <textarea class="form-control form-control-sm bg-light text-dark small" rows="2"
+                        x-model="clienteData.direccion" readonly placeholder="Dirección desde BD..."></textarea>
+              <div class="mt-2 small text-muted" x-show="clienteData.resumen" x-text="clienteData.resumen"></div>
+            </div>
+          </div>
         </div>
 
-        <form id="frmNotaDebito" @submit.prevent="guardarComprobante">
-            {% csrf_token %}
-            <input type="hidden" name="tipo_comprobante" value="08">
-
-            <div class="row g-3">
-                <div class="col-xl-5 col-lg-6">
-                    <div class="card mb-3 shadow-sm border-top border-indigo border-3">
-                        <div class="card-header bg-white">
-                            <h5 class="card-title mb-0 fs-6 text-dark fw-bold"><i class="bi bi-link-45deg me-2"></i>Documento Referenciado</h5>
-                        </div>
-                        <div class="card-body bg-white">
-                            <div class="row g-2 mb-3">
-                                <div class="col-6">
-                                    <label class="form-label fw-bold small text-dark">Comprobante Base</label>
-                                    <select class="form-select form-select-sm text-dark" required>
-                                        <option value="01">FACTURA ELECTRÓNICA</option>
-                                    </select>
-                                </div>
-                                <div class="col-6">
-                                    <label class="form-label fw-bold small text-dark">Nro. de Documento</label>
-                                    <input type="text" class="form-control form-control-sm text-dark font-monospace" placeholder="F001-00000012" required>
-                                </div>
-                            </div>
-                            <div class="mb-1">
-                                <label class="form-label fw-bold small text-dark">Sustento (Intereses / Penalidades)</label>
-                                <select class="form-select form-select-sm text-dark mb-2" required>
-                                    <option value="1">Interés por mora</option>
-                                    <option value="2">Aumento en el valor de la operación</option>
-                                </select>
-                                <textarea class="form-control form-control-sm text-dark small" rows="2" placeholder="Describa el motivo del cobro adicional..." required></textarea>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card mb-3 shadow-sm">
-                        <div class="card-header bg-white">
-                            <h5 class="card-title mb-0 fs-6 text-dark fw-bold"><i class="bi bi-person-bounding-box me-2"></i>Datos del Cliente</h5>
-                        </div>
-                        <div class="card-body bg-white">
-                            <div class="mb-3">
-                                <label class="form-label fw-bold small text-dark">Seleccionar Receptor</label>
-                                <select class="form-select shadow-sm text-dark form-select-sm" name="cliente" id="selectCliente" required>
-                                    <option value="">-- Seleccione un Cliente --</option>
-                                    {% for c in clientes %}
-                                        <option value="{{ c.id }}" data-dir="{{ c.direccion|default:'Sin dirección registrada.' }}" data-doc="{{ c.nrodoc }}" data-nombre="{{ c.razon_social }}">
-                                            {{ c.nrodoc }} - {{ c.razon_social }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="mb-1">
-                                <label class="form-label fw-bold small text-dark">Dirección Fiscal</label>
-                                <textarea class="form-control form-control-sm bg-light text-dark small" rows="2" x-model="clienteData.direccion" readonly placeholder="Dirección automática..."></textarea>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-xl-7 col-lg-6">
-                    <div class="card mb-3 shadow-sm bg-white p-3">
-                        <div class="d-flex flex-column flex-sm-row align-items-sm-end gap-2">
-                            <div class="flex-grow-1">
-                                <label class="form-label small fw-bold text-dark mb-1"><i class="bi bi-search me-1"></i> Adicionar concepto de cobro</label>
-                                <select class="form-select text-dark shadow-sm form-select-sm" x-model="productoBuscado" id="selectProducto">
-                                    <option value="">-- Seleccione concepto --</option>
-                                    {% for p in productos %}
-                                        <option value="{{ p.id }}" data-nombre="{{ p.nombre }}" data-precio="{{ p.valor_unitario }}">
-                                            📦 {{ p.nombre }} (S/. {{ p.valor_unitario }})
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div style="min-width: 120px;">
-                                <button type="button" class="btn text-white btn-sm fw-bold w-100 shadow-sm" style="background-color: #343a40; height: 31px;" @click="agregarItem()">
-                                    Agregar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card shadow-sm mb-3 overflow-hidden">
-                        <table class="table table-hover align-middle mb-0 text-nowrap">
-                            <thead class="table-dark small text-uppercase font-monospace text-center">
-                                <tr>
-                                    <th style="width: 5%;">#</th>
-                                    <th class="text-start">Descripción del Concepto</th>
-                                    <th style="width: 15%;">Monto Recargo</th>
-                                    <th style="width: 5%;">M</th>
-                                </tr>
-                            </thead>
-                            <tbody class="small bg-white">
-                                <template x-for="(item, index) in carrito" :key="item.id">
-                                    <tr class="text-center">
-                                        <td class="font-monospace text-muted" x-text="index + 1"></td>
-                                        <td class="text-start fw-bold text-dark" x-text="item.nombre"></td>
-                                        <td><input type="number" class="form-control form-control-sm text-end text-dark fw-bold" style="width: 110px; margin: 0 auto;" step="0.01" x-model.number="item.v_unitario" @input="calcularTotales"></td>
-                                        <td><button type="button" class="btn btn-sm btn-outline-danger border-0 rounded-circle" @click="eliminarItem(index)"><i class="bi bi-trash3-fill"></i></button></td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="row g-2 justify-content-end">
-                        <div class="col-md-6 col-lg-5">
-                            <div class="card shadow-sm p-3 small font-monospace bg-white border-top border-3" style="border-color: #6610f2;">
-                                <div class="d-flex justify-content-between mb-2 text-muted"><span>Recargo (Base):</span><span class="text-dark fw-bold">S/. <span x-text="totales.op_grabadas"></span></span></div>
-                                <div class="d-flex justify-content-between mb-2 text-muted"><span>IGV (18%):</span><span class="text-dark fw-bold">S/. <span x-text="totales.igv"></span></span></div>
-                                <hr class="my-2">
-                                <div class="d-flex justify-content-between align-items-center text-dark"><span class="fs-6 fw-bold">Total Nota:</span><span class="fs-5 fw-bolder" style="color: #6610f2;">S/. <span x-text="totales.total"></span></span></div>
-                            </div>
-                            <div class="mt-3">
-                                <button type="submit" class="btn btn-dark btn-lg w-100 fw-bold shadow text-white" :disabled="carrito.length === 0">
-                                    <i class="bi bi-cloud-arrow-up-fill me-2"></i> Emitir Nota Débito
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
+        <div class="col-xl-7 col-lg-6">
+          <!-- Productos (BD) -->
+          <div class="card mb-3 shadow-sm bg-white p-3">
+            <div class="d-flex flex-column flex-sm-row align-items-sm-end gap-2">
+              <div class="flex-grow-1">
+                <label class="form-label small fw-bold text-dark mb-1">
+                  <i class="bi bi-database me-1"></i> Concepto de cobro (tabla producto)
+                </label>
+                <select class="form-select text-dark shadow-sm form-select-sm" id="selectProducto">
+                  <option value="">-- Seleccione concepto --</option>
+                  {% for p in productos %}
+                  <option value="{{ p.id_producto }}"
+                          data-nombre="{{ p.nombre }}"
+                          data-precio="{{ p.valor_unitario }}">
+                    {{ p.nombre }} (S/. {{ p.valor_unitario }})
+                  </option>
+                  {% empty %}
+                  <option value="" disabled>No hay productos en BD</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div style="min-width: 120px;">
+                <button type="button" class="btn text-white btn-sm fw-bold w-100 shadow-sm"
+                        style="background-color: #343a40; height: 31px;"
+                        @click.prevent="agregarItem()">
+                  Agregar
+                </button>
+              </div>
             </div>
-        </form>
-    </div>
+          </div>
+
+          <div class="card shadow-sm mb-3 overflow-hidden">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-dark small text-uppercase text-center">
+                <tr>
+                  <th style="width:5%;">#</th>
+                  <th class="text-start">Descripción del concepto</th>
+                  <th style="width:18%;">Monto recargo</th>
+                  <th style="width:5%;"></th>
+                </tr>
+              </thead>
+              <tbody class="small bg-white">
+                <template x-for="(item, index) in carrito" :key="item.uid">
+                  <tr class="text-center">
+                    <td class="font-monospace text-muted" x-text="index + 1"></td>
+                    <td class="text-start fw-bold text-dark" x-text="item.nombre"></td>
+                    <td>
+                      <input type="number" class="form-control form-control-sm text-end fw-bold"
+                             style="max-width:120px;margin:0 auto;" step="0.01" min="0"
+                             x-model.number="item.v_unitario" @input="calcularTotales()">
+                    </td>
+                    <td>
+                      <button type="button" class="btn btn-sm btn-outline-danger border-0"
+                              @click="eliminarItem(index)"><i class="bi bi-trash3-fill"></i></button>
+                    </td>
+                  </tr>
+                </template>
+                <tr x-show="carrito.length === 0">
+                  <td colspan="4" class="text-center text-muted py-4">
+                    Seleccione un producto de la BD y pulse <strong>Agregar</strong>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="row g-2 justify-content-end">
+            <div class="col-md-6 col-lg-5">
+              <div class="card shadow-sm p-3 small font-monospace bg-white border-top border-3" style="border-color:#6610f2;">
+                <div class="d-flex justify-content-between mb-2 text-muted">
+                  <span>Recargo (base):</span>
+                  <span class="text-dark fw-bold">S/. <span x-text="totales.op_grabadas"></span></span>
+                </div>
+                <div class="d-flex justify-content-between mb-2 text-muted">
+                  <span>IGV (18%):</span>
+                  <span class="text-dark fw-bold">S/. <span x-text="totales.igv"></span></span>
+                </div>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between align-items-center text-dark">
+                  <span class="fs-6 fw-bold">Total nota:</span>
+                  <span class="fs-5 fw-bolder" style="color:#6610f2;">S/. <span x-text="totales.total"></span></span>
+                </div>
+              </div>
+              <div class="mt-3">
+                <button type="submit" class="btn btn-dark btn-lg w-100 fw-bold shadow text-white"
+                        :disabled="carrito.length === 0 || !comprobante || !clienteSeleccionado">
+                  <i class="bi bi-cloud-arrow-up-fill me-2"></i> Emitir Nota Débito
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
 </div>
+{% endblock %}
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+{% block extra_scripts %}
 <script>
-$(document).ready(function() {
-    $('#selectCliente').on('change', function (e) {
-        let alpineComponent = Alpine.$data(document.getElementById('facturador-app'));
-        let selectedOption = e.target.options[e.target.selectedIndex];
-        if (selectedOption && selectedOption.value !== "") {
-            alpineComponent.clienteSeleccionado = selectedOption.value;
-            alpineComponent.clienteData.direccion = selectedOption.getAttribute('data-dir') || '';
-        } else {
-            alpineComponent.limpiarCliente();
-        }
-    });
-});
+function notaDebito() {
+  return {
+    busqueda: { serie: '', numero: '' },
+    comprobanteListaId: '',
+    comprobante: null,
+    buscando: false,
+    errorBusqueda: '',
+    tipoSustento: '02',
+    motivoSustento: '',
+    clienteSeleccionado: '',
+    clienteData: { direccion: '', resumen: '' },
+    carrito: [],
+    totales: { op_grabadas: '0.00', igv: '0.00', total: '0.00' },
+    _uid: 0,
 
-function facturador(tipoCompId) {
-    return {
-        tipoDocId: tipoCompId,
-        productoBuscado: '',
-        clienteSeleccionado: '',
-        clienteData: { direccion: '' },
-        carrito: [],
-        totales: { op_grabadas: '0.00', igv: '0.00', total: '0.00' },
-        limpiarCliente() { this.clienteSeleccionado = ''; this.clienteData.direccion = ''; },
-        agregarItem() {
-            if (!this.productoBuscado) return;
-            const select = document.getElementById('selectProducto');
-            const option = select.options[select.selectedIndex];
-            if (!option) return;
-            this.carrito.push({ id: this.productoBuscado, nombre: option.getAttribute('data-nombre'), v_unitario: parseFloat(option.getAttribute('data-precio')), cantidad: 1 });
-            this.productoBuscado = '';
-            this.calcularTotales();
-        },
-        eliminarItem(index) { this.carrito.splice(index, 1); this.calcularTotales(); },
-        calcularTotales() {
-            let subtotal = 0;
-            this.carrito.forEach(item => { subtotal += item.v_unitario; });
-            let igv = subtotal * 0.18;
-            this.totales.op_grabadas = subtotal.toFixed(2);
-            this.totales.igv = igv.toFixed(2);
-            this.totales.total = (subtotal + igv).toFixed(2);
+    limpiarComprobante() {
+      this.comprobante = null;
+      this.errorBusqueda = '';
+      this.comprobanteListaId = '';
+    },
+
+    aplicarComprobante(data) {
+      this.comprobante = data;
+      this.busqueda.serie = data.serie;
+      this.busqueda.numero = data.correlativo;
+      this.clienteSeleccionado = String(data.cliente_id);
+      this.clienteData.direccion = data.direccion || '';
+      this.clienteData.resumen = (data.cliente_doc || '') + ' - ' + (data.cliente || '');
+      const sel = document.getElementById('selectCliente');
+      if (sel) sel.value = String(data.cliente_id);
+    },
+
+    async cargarDesdeLista() {
+      if (!this.comprobanteListaId) {
+        this.limpiarComprobante();
+        return;
+      }
+      this.buscando = true;
+      this.errorBusqueda = '';
+      try {
+        const opt = document.querySelector(
+          `#nota-debito-app option[value="${this.comprobanteListaId}"]`
+        );
+        if (!opt) return;
+        const serie = opt.getAttribute('data-serie');
+        const numero = opt.getAttribute('data-correlativo');
+        const resp = await fetch(
+          `/api/comprobantes/buscar/?serie=${encodeURIComponent(serie)}&numero=${encodeURIComponent(numero)}`
+        );
+        const data = await resp.json();
+        if (data.encontrado) {
+          this.aplicarComprobante(data);
+        } else {
+          this.errorBusqueda = data.error || 'No se pudo cargar el comprobante.';
+          this.comprobante = null;
         }
-    }
+      } catch (e) {
+        this.errorBusqueda = 'Error al consultar la base de datos.';
+      } finally {
+        this.buscando = false;
+      }
+    },
+
+    async buscarComprobante() {
+      if (!this.busqueda.serie || !this.busqueda.numero) {
+        this.errorBusqueda = 'Ingrese serie y número del documento referenciado.';
+        return;
+      }
+      this.buscando = true;
+      this.errorBusqueda = '';
+      this.comprobante = null;
+      try {
+        const resp = await fetch(
+          `/api/comprobantes/buscar/?serie=${encodeURIComponent(this.busqueda.serie.toUpperCase())}&numero=${encodeURIComponent(this.busqueda.numero)}`
+        );
+        const data = await resp.json();
+        if (data.encontrado) {
+          this.aplicarComprobante(data);
+          this.comprobanteListaId = String(data.id);
+        } else {
+          this.errorBusqueda = data.error || 'Comprobante no encontrado en BD.';
+        }
+      } catch (e) {
+        this.errorBusqueda = 'Error de conexión al buscar en BD.';
+      } finally {
+        this.buscando = false;
+      }
+    },
+
+    actualizarClienteManual() {
+      const sel = document.getElementById('selectCliente');
+      if (!sel || sel.selectedIndex <= 0) {
+        this.clienteData.direccion = '';
+        this.clienteData.resumen = '';
+        return;
+      }
+      const opt = sel.options[sel.selectedIndex];
+      this.clienteData.direccion = opt.getAttribute('data-dir') || '';
+      this.clienteData.resumen = (opt.getAttribute('data-doc') || '') + ' - ' + (opt.getAttribute('data-nombre') || '');
+    },
+
+    agregarItem() {
+      const sel = document.getElementById('selectProducto');
+      if (!sel || sel.selectedIndex <= 0) {
+        alert('Seleccione un concepto de la lista (base de datos producto).');
+        return;
+      }
+      const opt = sel.options[sel.selectedIndex];
+      const idProducto = opt.value;
+      const nombre = opt.getAttribute('data-nombre') || opt.text.trim();
+      const precio = parseFloat(opt.getAttribute('data-precio')) || 0;
+
+      const idx = this.carrito.findIndex(i => String(i.id) === String(idProducto));
+      if (idx !== -1) {
+        this.carrito[idx].v_unitario = precio;
+      } else {
+        this._uid += 1;
+        this.carrito.push({
+          uid: this._uid,
+          id: idProducto,
+          nombre: nombre,
+          v_unitario: precio,
+          cantidad: 1,
+        });
+      }
+      sel.selectedIndex = 0;
+      this.calcularTotales();
+    },
+
+    eliminarItem(index) {
+      this.carrito.splice(index, 1);
+      this.calcularTotales();
+    },
+
+    calcularTotales() {
+      let subtotal = 0;
+      this.carrito.forEach(item => {
+        subtotal += (parseFloat(item.v_unitario) || 0) * (item.cantidad || 1);
+      });
+      const igv = subtotal * 0.18;
+      this.totales.op_grabadas = subtotal.toFixed(2);
+      this.totales.igv = igv.toFixed(2);
+      this.totales.total = (subtotal + igv).toFixed(2);
+    },
+
+    async guardarComprobante() {
+      if (!this.comprobante) {
+        alert('Seleccione o busque el documento referenciado en la base de datos.');
+        return;
+      }
+      if (!this.clienteSeleccionado) {
+        alert('Seleccione el cliente receptor.');
+        return;
+      }
+      if (!this.motivoSustento.trim()) {
+        alert('Describa el sustento del cobro adicional.');
+        return;
+      }
+      if (this.carrito.length === 0) {
+        alert('Agregue al menos un concepto de cobro.');
+        return;
+      }
+
+      const payload = {
+        cliente_id: this.clienteSeleccionado,
+        forma_pago: 'Contado',
+        tipo_comprobante: '08',
+        comprobante_id: this.comprobante.id,
+        comprobante_ref: this.comprobante,
+        tipo_sustento: this.tipoSustento,
+        codmotivo: this.tipoSustento,
+        motivo: this.motivoSustento,
+        totales: this.totales,
+        items: this.carrito.map(item => ({
+          id: item.id,
+          cantidad: item.cantidad || 1,
+          v_unitario: item.v_unitario,
+        })),
+        cuotas: [],
+        moneda_id: 1,
+      };
+
+      const resp = await fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        const msg = 'Nota de Débito ' + data.numeracion + ' emitida.\nSUNAT: ' + (data.mensaje_sunat || '');
+        if (data.comprobante_id && confirm(msg + '\n\n¿Abrir vista de impresión?')) {
+          window.open('/comprobantes/' + data.comprobante_id + '/imprimir/?formato=ticket', '_blank');
+        } else {
+          alert(msg);
+        }
+        window.location.reload();
+      } else {
+        alert('Error: ' + (data.error || 'No se pudo emitir.'));
+      }
+    },
+  };
 }
 </script>
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
 {% endblock %}

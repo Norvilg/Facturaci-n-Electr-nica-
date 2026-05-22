@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <h3 class="mb-0"><i class="bi bi-building me-2"></i>Perfil del emisor</h3>
+    <p class="text-muted small mb-0">Datos registrados en PostgreSQL (tabla emisor)</p>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+        <div class="card shadow-sm">
+          <div class="card-header text-bg-primary">
+            <h3 class="card-title mb-0 text-white">Información de la empresa</h3>
+          </div>
+          <div class="card-body text-center text-lg-start">
+            <div class="text-center mb-4">
+              <img
+                src="{% static 'assets/img/login.png' %}"
+                alt="Logo de la empresa"
+                class="rounded-circle shadow border"
+                style="width:120px;height:120px;object-fit:cover;"
+              />
+            </div>
+            {% if emisor %}
+            <dl class="row mb-4">
+              <dt class="col-sm-4">RUC</dt>
+              <dd class="col-sm-8"><strong>{{ emisor.ruc }}</strong></dd>
+              <dt class="col-sm-4">Razón social</dt>
+              <dd class="col-sm-8">{{ emisor.razon_social }}</dd>
+              <dt class="col-sm-4">Nombre comercial</dt>
+              <dd class="col-sm-8">{{ emisor.nombre_comercial }}</dd>
+              <dt class="col-sm-4">Dirección</dt>
+              <dd class="col-sm-8">{{ emisor.direccion|default:"—" }}</dd>
+              <dt class="col-sm-4">Ubigeo</dt>
+              <dd class="col-sm-8">{{ emisor.ubigeo|default:"—" }}</dd>
+              <dt class="col-sm-4">IGV</dt>
+              <dd class="col-sm-8">{{ emisor.porcetajeigv }}%</dd>
+              <dt class="col-sm-4">Usuario SOL</dt>
+              <dd class="col-sm-8">{{ emisor.usuario_sol }}</dd>
+            </dl>
+            <p class="text-muted small">Para editar estos datos use el panel de administración Django.</p>
+            <a href="/admin/facturacion/emisor/" class="btn btn-primary">
+              <i class="bi bi-pencil-square me-1"></i> Editar en Admin
+            </a>
+            {% else %}
+            <p class="text-muted">No hay emisor configurado. Agregue un registro en la tabla <code>emisor</code>.</p>
+            <a href="/admin/facturacion/emisor/add/" class="btn btn-primary">Crear emisor en Admin</a>
+            {% endif %}
+          </div>
+          <div class="card-footer">
+            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm">
+              <i class="bi bi-arrow-left me-1"></i> Volver al panel
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

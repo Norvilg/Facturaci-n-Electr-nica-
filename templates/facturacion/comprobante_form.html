@@ -64,7 +64,7 @@
                                     <select class="form-select shadow-sm text-dark form-select-sm" name="cliente" id="selectCliente" required x-model="clienteSeleccionado" @change="actualizarDatosCliente">
                                         <option value="">-- Seleccione un Cliente --</option>
                                         {% for c in clientes %}
-                                            <option value="{{ c.id }}" data-dir="{{ c.direccion|default:'Sin dirección registrada.' }}" data-doc="{{ c.nrodoc }}" data-nombre="{{ c.razon_social }}">
+                                            <option value="{{ c.id_cliente }}" data-dir="{{ c.direccion|default:'Sin dirección registrada.' }}" data-doc="{{ c.nrodoc }}" data-nombre="{{ c.razon_social }}">
                                                 {{ c.nrodoc }} - {{ c.razon_social }}
                                             </option>
                                         {% endfor %}
@@ -156,7 +156,7 @@
                                     <select class="form-select text-dark shadow-sm form-select-sm" id="selectProducto">
                                         <option value="">-- Selecciona el ítem que vas a vender --</option>
                                         {% for p in productos %}
-                                            <option value="{{ p.id }}" data-nombre="{{ p.nombre }}" data-precio="{{ p.valor_unitario }}">
+                                            <option value="{{ p.id_producto }}" data-nombre="{{ p.nombre }}" data-precio="{{ p.valor_unitario }}">
                                                 📦 {{ p.nombre }} (S/. {{ p.valor_unitario }})
                                             </option>
                                         {% endfor %}
@@ -279,20 +279,11 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
 $(document).ready(function() {
-    $('#selectCliente').on('change', function (e) {
-        // Esperar a que Alpine esté disponible
+    $('#selectCliente').on('change', function () {
         if (typeof Alpine === 'undefined') return;
-        
-        let alpineComponent = Alpine.$data(document.getElementById('facturador-app'));
-        let selectedOption = e.target.options[e.target.selectedIndex];
-        
-        if (selectedOption && selectedOption.value !== "") {
-            alpineComponent.clienteSeleccionado = selectedOption.value;
-            alpineComponent.clienteData.direccion = selectedOption.getAttribute('data-dir') || 'Sin dirección registrada.';
-            alpineComponent.clienteData.info_resumen = selectedOption.getAttribute('data-doc') + ' - ' + selectedOption.getAttribute('data-nombre');
-        } else {
-            alpineComponent.limpiarCliente();
-        }
+        const root = document.getElementById('facturador-app');
+        if (!root) return;
+        Alpine.$data(root).actualizarDatosCliente({ target: this });
     });
 });
 
@@ -324,23 +315,16 @@ function facturador(tipoCompId) {
 
             // El $watch que ya tienes y funciona bien:
             this.$watch('clienteSeleccionado', (valor) => {
-                if (!valor || valor === "") {
-                    this.limpiarCliente();
+                const selectNativo = document.getElementById('selectCliente');
+                if (!selectNativo || selectNativo.selectedIndex <= 0) {
+                    if (!valor || valor === '') this.limpiarCliente();
                     return;
                 }
-
-                const selectNativo = document.getElementById('selectCliente');
-                if (selectNativo) {
-                    const opcionEncontrada = Array.from(selectNativo.options).find(opt => opt.value === valor);
-                    if (opcionEncontrada) {
-                        const doc = opcionEncontrada.getAttribute('data-doc') || '';
-                        const nombre = opcionEncontrada.getAttribute('data-nombre') || '';
-                        const dir = opcionEncontrada.getAttribute('data-dir') || 'Sin dirección registrada.';
-                        
-                        this.clienteData.direccion = dir;
-                        this.clienteData.info_resumen = doc + ' - ' + nombre;
-                    }
-                }
+                const opcion = selectNativo.options[selectNativo.selectedIndex];
+                const doc = opcion.getAttribute('data-doc') || '';
+                const nombre = opcion.getAttribute('data-nombre') || '';
+                this.clienteData.direccion = opcion.getAttribute('data-dir') || 'Sin dirección registrada.';
+                this.clienteData.info_resumen = doc + (doc && nombre ? ' - ' : '') + nombre;
             });
         },
         cambiarTipoComprobante() {
@@ -368,14 +352,19 @@ function facturador(tipoCompId) {
         },
 
         actualizarDatosCliente(e) {
-            const select = e.target;
-            const option = select.options[select.selectedIndex];
-            if (option && option.value !== "") {
-                this.clienteData.direccion = option.getAttribute('data-dir') || '';
-                this.clienteData.info_resumen = option.getAttribute('data-doc') + ' - ' + option.getAttribute('data-nombre');
-            } else {
+            const select = e?.target || document.getElementById('selectCliente');
+            if (!select || select.selectedIndex <= 0) {
                 this.limpiarCliente();
+                return;
             }
+            const option = select.options[select.selectedIndex];
+            const doc = option.getAttribute('data-doc') || '';
+            const nombre = option.getAttribute('data-nombre') || '';
+            const dir = option.getAttribute('data-dir') || 'Sin dirección registrada.';
+
+            this.clienteSeleccionado = option.value || String(select.selectedIndex);
+            this.clienteData.direccion = dir;
+            this.clienteData.info_resumen = doc + (doc && nombre ? ' - ' : '') + nombre;
         },
 
         // CORREGIDO: Inyección forzada en la grilla del carrito
@@ -518,7 +507,12 @@ function facturador(tipoCompId) {
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    alert('¡Comprobante ' + data.numeracion + ' emitido exitosamente!\nRespuesta SUNAT: ' + data.mensaje_sunat);
+                    const msg = '¡Comprobante ' + data.numeracion + ' emitido!\nSUNAT: ' + (data.mensaje_sunat || '');
+                    if (data.comprobante_id && confirm(msg + '\n\n¿Abrir vista de impresión?')) {
+                        window.open('/comprobantes/' + data.comprobante_id + '/imprimir/?formato=ticket', '_blank');
+                    } else {
+                        alert(msg);
+                    }
                     window.location.reload();
                 } else {
                     alert('Error de Validación: ' + data.error);
